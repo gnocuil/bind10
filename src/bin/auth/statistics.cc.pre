@@ -59,7 +59,7 @@ fillNodes(Counter& counter,
             fillNodes(counter, type_tree[i].sub_counters, sub_counters);
         } else {
             v = counter.getClear(type_tree[i].counter_id);
-            v = v & 0x7fffffffffffffff;
+            v = v & 0x7fffffffffffffffLL;
             if (v != 0) {
                 trees->set(type_tree[i].name,
                        Element::create(- static_cast<int64_t>(v)));
