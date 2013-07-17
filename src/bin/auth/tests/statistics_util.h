@@ -27,6 +27,12 @@ void
 checkStatisticsCounters(const isc::data::ConstElementPtr counters,
                         const std::map<std::string, int>& expect);
 
+// Test if the counters has expected values specified in expect and the others
+// are zero.
+void
+checkStatisticsCountersInc(const isc::data::ConstElementPtr counters,
+                        const std::map<std::string, int>& expect);
+
 } // end of unittest
 } // end of auth
 } // end of isc

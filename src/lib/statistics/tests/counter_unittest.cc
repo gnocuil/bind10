@@ -46,6 +46,7 @@ protected:
 TEST_F(CounterTest, createCounter) {
     // Check if the all counters are initialized with 0
     EXPECT_EQ(counter.get(ITEM1), 0);
+    EXPECT_EQ(counter.getClear(ITEM1), 0);
     EXPECT_EQ(counter.get(ITEM2), 0);
     EXPECT_EQ(counter.get(ITEM3), 0);
 }
@@ -73,6 +74,8 @@ TEST_F(CounterTest, incrementCounterItem) {
     EXPECT_EQ(counter.get(ITEM1), 2);
     EXPECT_EQ(counter.get(ITEM2), 4);
     EXPECT_EQ(counter.get(ITEM3), 6);
+    EXPECT_EQ(counter.getClear(ITEM3), 6);
+    EXPECT_EQ(counter.getClear(ITEM3), 0);
 
     for (long long int i = 0; i < 4294967306; i++) {
         counter.inc(ITEM1);

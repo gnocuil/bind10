@@ -70,6 +70,27 @@ checkStatisticsCounters(const isc::data::ConstElementPtr counters,
     }
 }
 
+void
+checkStatisticsCountersInc(const isc::data::ConstElementPtr counters,
+                        const std::map<std::string, int>& expect)
+{
+    std::map<std::string, int> stats_map;
+    flatten(stats_map, "", counters);
+
+    for (std::map<std::string, int>::const_iterator
+            i = stats_map.begin(), e = stats_map.end();
+            i != e;
+            ++i)
+    {
+        const int value =
+            expect.find(i->first) == expect.end() ?
+                0 : -expect.find(i->first)->second;
+        EXPECT_EQ(value, i->second) << "Expected counter "
+            << i->first << " = " << value << ", actual: "
+            << i->second;
+    }
+}
+
 } // end of unittest
 } // end of auth
 } // end of isc

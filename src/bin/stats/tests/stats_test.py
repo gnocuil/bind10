@@ -166,6 +166,8 @@ class TestUtilties(unittest.TestCase):
 
     def test_merge_oldnre(self):
         self.assertEqual(stats.merge_oldnew(1, 2), 2)
+        self.assertEqual(stats.merge_oldnew(1, -2), 3)
+        self.assertEqual(stats.merge_oldnew(None, -1), 1)
         self.assertEqual(stats.merge_oldnew(0.5, 0.3), 0.3)
         self.assertEqual(stats.merge_oldnew('aa','bb'), 'bb')
         self.assertEqual(stats.merge_oldnew(
@@ -196,6 +198,10 @@ class TestUtilties(unittest.TestCase):
                 [ {'one': 1, 'two': 2, 'three': 3}, {'four': 4, 'five': 5, 'six': 6} ],
                 [ {}, {'four': 1, 'five': 2, 'six': 3} ]),
                 [ {'one': 1, 'two': 2, 'three': 3}, {'four': 1, 'five': 2, 'six': 3} ])
+        self.assertEqual(stats.merge_oldnew(
+                [ {'one': 1, 'two': 2, 'three': 3}, {'four': 4, 'five': 5, 'six': 6} ],
+                [ {}, {'four': -1, 'five': -2, 'six': -3} ]),
+                [ {'one': 1, 'two': 2, 'three': 3}, {'four': 5, 'five': 7, 'six': 9} ])
 
 class TestCallback(unittest.TestCase):
     def setUp(self):

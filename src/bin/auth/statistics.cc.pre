@@ -41,12 +41,16 @@ namespace {
 ///                  name
 /// \param trees isc::data::ElementPtr to be filled in; caller has ownership of
 ///              isc::data::ElementPtr
+///
+/// Note: This function clears all counters to send incremental/differential 
+/// values. Minus integer values indicate increments.
 void
-fillNodes(const Counter& counter,
+fillNodes(Counter& counter,
           const struct isc::auth::statistics::CounterSpec type_tree[],
           isc::data::ElementPtr& trees)
 {
     using namespace isc::data;
+    isc::statistics::Counter::Value v;
 
     for (int i = 0; type_tree[i].name != NULL; ++i) {
         if (type_tree[i].sub_counters != NULL) {
@@ -54,10 +58,12 @@ fillNodes(const Counter& counter,
             trees->set(type_tree[i].name, sub_counters);
             fillNodes(counter, type_tree[i].sub_counters, sub_counters);
         } else {
-            trees->set(type_tree[i].name,
-                       Element::create(static_cast<int64_t>(
-                           counter.get(type_tree[i].counter_id) & 0x7fffffffffffffff))
-                       );
+            v = counter.getClear(type_tree[i].counter_id);
+            v = v & 0x7fffffffffffffff;
+            if (v != 0) {
+                trees->set(type_tree[i].name,
+                       Element::create(- static_cast<int64_t>(v)));
+            }
         }
     }
 }
@@ -266,7 +272,7 @@ Counters::inc(const MessageAttributes& msgattrs, const Message& response,
 }
 
 Counters::ConstItemTreePtr
-Counters::get() const {
+Counters::get() {
     using namespace isc::data;
 
     isc::data::ElementPtr item_tree = Element::createMap();

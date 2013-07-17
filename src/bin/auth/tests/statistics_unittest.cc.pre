@@ -137,17 +137,17 @@ TEST_F(CountersTest, incrementResponse) {
         counters.inc(msgattrs, response, responded);
 
         expect.clear();
-        expect["opcode.query"] = i+1;
-        expect["request.v4"] = i+1;
-        expect["request.udp"] = i+1;
-        expect["request.edns0"] = i+1;
+        expect["opcode.query"] = 1;
+        expect["request.v4"] = 1;
+        expect["request.udp"] = 1;
+        expect["request.edns0"] = 1;
         expect["request.badednsver"] = 0;
-        expect["request.dnssec_ok"] = i+1;
+        expect["request.dnssec_ok"] = 1;
         expect["responses"] = responded ? 1 : 0;
         expect["qrynoauthans"] = responded ? 1 : 0;
         expect["rcode.refused"] = responded ? 1 : 0;
         expect["authqryrej"] = responded ? 1 : 0;
-        checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+        checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                                 expect);
     }
 }
@@ -181,30 +181,34 @@ TEST_F(CountersTest, incrementProtocolType) {
         counters.inc(msgattrs, response, true);
 
         if (af == AF_INET) {
-            ++count_v4;
+            count_v4 = 1;
+            count_v6 = 0;
         } else {
-            ++count_v6;
+            count_v4 = 0;
+            count_v6 = 1;
         }
         if (proto == IPPROTO_UDP) {
-            ++count_udp;
+            count_tcp = 0;
+            count_udp = 1;
         } else {
-            ++count_tcp;
+            count_tcp = 1;
+            count_udp = 0;
         }
 
         expect.clear();
-        expect["opcode.query"] = i+1;
+        expect["opcode.query"] = 1;
         expect["request.v4"] = count_v4;
         expect["request.v6"] = count_v6;
         expect["request.udp"] = count_udp;
         expect["request.tcp"] = count_tcp;
-        expect["request.edns0"] = i+1;
+        expect["request.edns0"] = 1;
         expect["request.badednsver"] = 0;
-        expect["request.dnssec_ok"] = i+1;
-        expect["responses"] = i+1;
-        expect["qrynoauthans"] = i+1;
-        expect["rcode.refused"] = i+1;
-        expect["authqryrej"] = i+1;
-        checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+        expect["request.dnssec_ok"] = 1;
+        expect["responses"] = 1;
+        expect["qrynoauthans"] = 1;
+        expect["rcode.refused"] = 1;
+        expect["authqryrej"] = 1;
+        checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                                 expect);
     }
 }
@@ -232,17 +236,17 @@ TEST_F(CountersTest, incrementDO) {
         counters.inc(msgattrs, response, true);
 
         expect.clear();
-        expect["opcode.query"] = i+1;
-        expect["request.v4"] = i+1;
-        expect["request.udp"] = i+1;
-        expect["request.edns0"] = i+1;
+        expect["opcode.query"] = 1;
+        expect["request.v4"] = 1;
+        expect["request.udp"] = 1;
+        expect["request.edns0"] = 1;
         expect["request.badednsver"] = 0;
         expect["request.dnssec_ok"] = i & 1;
-        expect["responses"] = i+1;
-        expect["qrynoauthans"] = i+1;
-        expect["rcode.refused"] = i+1;
-        expect["authqryrej"] = i+1;
-        checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+        expect["responses"] = 1;
+        expect["qrynoauthans"] = 1;
+        expect["rcode.refused"] = 1;
+        expect["authqryrej"] = 1;
+        checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                                 expect);
     }
 }
@@ -259,7 +263,6 @@ TEST_F(CountersTest, incrementEDNS) {
     //     true            false
     //
     // They can't be both true since edns0 and badednsver are exclusive.
-    int count_req_edns0 = 0, count_res_edns0 = 0;
     for (int i = 0; i < 2; ++i) {
         const bool is_edns0 = i & 1;
         buildSkeletonMessage(msgattrs);
@@ -278,25 +281,19 @@ TEST_F(CountersTest, incrementEDNS) {
 
         counters.inc(msgattrs, response, true);
 
-        if (is_edns0) {
-            ++count_req_edns0;
-        } else {
-            ++count_res_edns0;
-        }
-
         expect.clear();
-        expect["opcode.query"] = i+1;
-        expect["request.v4"] = i+1;
-        expect["request.udp"] = i+1;
-        expect["request.edns0"] = count_req_edns0;
-        expect["response.edns0"] = count_res_edns0;
+        expect["opcode.query"] = 1;
+        expect["request.v4"] = 1;
+        expect["request.udp"] = 1;
+        expect["request.edns0"] = is_edns0;
+        expect["response.edns0"] = 1;
         expect["request.badednsver"] = 0;
-        expect["request.dnssec_ok"] = i+1;
-        expect["responses"] = i+1;
-        expect["qrynoauthans"] = i+1;
-        expect["rcode.refused"] = i+1;
-        expect["authqryrej"] = i+1;
-        checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+        expect["request.dnssec_ok"] = 1;
+        expect["responses"] = 1;
+        expect["qrynoauthans"] = 1;
+        expect["rcode.refused"] = 1;
+        expect["authqryrej"] = 1;
+        checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                                 expect);
     }
 }
@@ -342,21 +339,21 @@ TEST_F(CountersTest, incrementTSIG) {
         }
 
         expect.clear();
-        expect["request.v4"] = i+1;
-        expect["request.udp"] = i+1;
-        expect["opcode.query"] = i+1;
-        expect["request.edns0"] = i+1 - count_badsig;
+        expect["request.v4"] = 1;
+        expect["request.udp"] = 1;
+        expect["opcode.query"] = 1;
+        expect["request.edns0"] = 1 - is_badsig;
         expect["request.badednsver"] = 0;
-        expect["request.dnssec_ok"] = i+1 - count_badsig;
-        expect["request.tsig"] = count_req_tsig;
-        expect["response.tsig"] = count_res_tsig;
+        expect["request.dnssec_ok"] = 1 - is_badsig;
+        expect["request.tsig"] = is_req_tsig;
+        expect["response.tsig"] = is_res_tsig;
         expect["request.sig0"] = 0;
-        expect["request.badsig"] = count_badsig;
-        expect["responses"] = i+1 - count_badsig;
-        expect["qrynoauthans"] = i+1 - count_badsig;
-        expect["rcode.refused"] = i+1 - count_badsig;
-        expect["authqryrej"] = i+1 - count_badsig;
-        checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+        expect["request.badsig"] = is_badsig;
+        expect["responses"] = 1 - is_badsig;
+        expect["qrynoauthans"] = 1 - is_badsig;
+        expect["rcode.refused"] = 1 - is_badsig;
+        expect["authqryrej"] = 1 - is_badsig;
+        checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                                 expect);
     }
 }
@@ -392,29 +389,26 @@ TEST_F(CountersTest, incrementRD) {
 
         counters.inc(msgattrs, response, true);
 
-        if (opcode == Opcode::QUERY()) {
-            ++count_opcode_query;
-        } else {
-            ++count_opcode_status;
-        }
+        count_opcode_query = (opcode == Opcode::QUERY()) ? 1 : 0;
+        count_opcode_status = (opcode == Opcode::QUERY()) ? 0 : 1;
 
         expect.clear();
         expect["opcode.query"] = count_opcode_query;
         expect["opcode.status"] = count_opcode_status;
-        expect["request.v4"] = i+1;
-        expect["request.udp"] = i+1;
-        expect["request.edns0"] = i+1;
-        expect["request.dnssec_ok"] = i+1;
-        expect["responses"] = i+1;
+        expect["request.v4"] = 1;
+        expect["request.udp"] = 1;
+        expect["request.edns0"] = 1;
+        expect["request.dnssec_ok"] = 1;
+        expect["responses"] = 1;
         // qryrecursion will (only) be incremented if i == 1: OpCode=Query and
         // RD bit=1
         expect["qryrecursion"] = (i == 0) ? 0 : 1;
-        expect["rcode.refused"] = i+1;
+        expect["rcode.refused"] = 1;
         // these counters are for queries; the value will be equal to the
         // number of requests with OpCode=Query
         expect["qrynoauthans"] = count_opcode_query;
         expect["authqryrej"] = count_opcode_query;
-        checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+        checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                                 expect);
     }
 }
@@ -425,7 +419,7 @@ TEST_F(CountersTest, incrementOpcode) {
     std::map<std::string, int> expect;
 
     // Test all opcodes (QUERY..RESERVED15)
-    int count_all = 0, count_opcode_other = 0;
+    int count_opcode_other = 0;
     for (uint8_t i = Opcode::QUERY().getCode(),
                  e = Opcode::RESERVED15().getCode();
          i <= e;
@@ -443,20 +437,20 @@ TEST_F(CountersTest, incrementOpcode) {
         for (uint8_t j = 0; j < i; ++j) {
             // count up i times for i-th opcode to identify counters
             counters.inc(msgattrs, response, true);
-            ++count_all;
         }
 
         expect.clear();
-        expect["request.v4"] = count_all;
-        expect["request.udp"] = count_all;
-        expect["request.edns0"] = count_all;
+        expect["request.v4"] = i;
+        expect["request.udp"] = i;
+        expect["request.edns0"] = i;
         expect["request.badednsver"] = 0;
-        expect["request.dnssec_ok"] = count_all;
+        expect["request.dnssec_ok"] = i;
         expect["request.tsig"] = 0;
         expect["request.sig0"] = 0;
         expect["request.badsig"] = 0;
-        expect["responses"] = count_all;
-        expect["rcode.refused"] = count_all;
+        expect["responses"] = i;
+        expect["rcode.refused"] = i;
+        count_opcode_other = 0;
         if (opcode_to_msgcounter[i] == MSG_OPCODE_OTHER) {
             count_opcode_other += i;
         }
@@ -470,7 +464,7 @@ TEST_F(CountersTest, incrementOpcode) {
                 expect["opcode."+code_text] = j;
             }
         }
-        checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+        checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                                 expect);
     }
 }
@@ -499,25 +493,26 @@ TEST_F(CountersTest, incrementRcode) {
         for (uint16_t j = 0; j < i; ++j) {
             // count up i times for i-th rcode to identify counters
             counters.inc(msgattrs, response, true);
-            ++count_all;
         }
 
         expect.clear();
-        expect["opcode.iquery"] = count_all;
-        expect["request.v4"] = count_all;
-        expect["request.udp"] = count_all;
-        expect["request.edns0"] = count_all;
-        expect["request.dnssec_ok"] = count_all;
+        expect["opcode.iquery"] = i;
+        expect["request.v4"] = i;
+        expect["request.udp"] = i;
+        expect["request.edns0"] = i;
+        expect["request.dnssec_ok"] = i;
         expect["request.tsig"] = 0;
         expect["request.sig0"] = 0;
         expect["request.badsig"] = 0;
-        expect["responses"] = count_all;
+        expect["responses"] = i;
+        count_rcode_other = 0;
+        count_ednsbadver = 0;
         if (rcode_to_msgcounter[i] == MSG_RCODE_OTHER) {
-            count_rcode_other += i;
+            count_rcode_other = i;
         }
         // "request.badednsver" counts for Rcode == BADVERS
         if (rcode_to_msgcounter[i] == MSG_RCODE_BADVERS) {
-            count_ednsbadver += i;
+            count_ednsbadver = i;
         }
         expect["request.badednsver"] = count_ednsbadver;
         for (uint16_t j = 0; j <= i; ++j) {
@@ -530,7 +525,7 @@ TEST_F(CountersTest, incrementRcode) {
                 expect["rcode."+code_text] = j;
             }
         }
-        checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+        checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                                 expect);
     }
 }
@@ -545,7 +540,6 @@ TEST_F(CountersTest, incrementTruncated) {
     //     -----------
     //      false
     //      true
-    int count_truncated = 0;
     for (int i = 0; i < 2; ++i) {
         const bool is_truncated = i & 1;
         buildSkeletonMessage(msgattrs);
@@ -560,20 +554,16 @@ TEST_F(CountersTest, incrementTruncated) {
 
         counters.inc(msgattrs, response, true);
 
-        if (is_truncated) {
-            ++count_truncated;
-        }
-
         expect.clear();
-        expect["opcode.iquery"] = i+1;
-        expect["request.v4"] = i+1;
-        expect["request.udp"] = i+1;
-        expect["request.edns0"] = i+1;
-        expect["request.dnssec_ok"] = i+1;
-        expect["responses"] = i+1;
-        expect["rcode.servfail"] = i+1;
-        expect["response.truncated"] = count_truncated;
-        checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+        expect["opcode.iquery"] = 1;
+        expect["request.v4"] = 1;
+        expect["request.udp"] = 1;
+        expect["request.edns0"] = 1;
+        expect["request.dnssec_ok"] = 1;
+        expect["responses"] = 1;
+        expect["rcode.servfail"] = 1;
+        expect["response.truncated"] = is_truncated;
+        checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                                 expect);
     }
 }
@@ -609,16 +599,16 @@ TEST_F(CountersTest, incrementQryAuthAnsAndNoAuthAns) {
         counters.inc(msgattrs, response, true);
 
         expect.clear();
-        expect["opcode.query"] = i+1;
-        expect["request.v4"] = i+1;
-        expect["request.udp"] = i+1;
-        expect["request.edns0"] = i+1;
-        expect["request.dnssec_ok"] = i+1;
-        expect["responses"] = i+1;
-        expect["rcode.servfail"] = i+1;
-        expect["qryauthans"] = count_authans;
-        expect["qrynoauthans"] = count_noauthans;
-        checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+        expect["opcode.query"] = 1;
+        expect["request.v4"] = 1;
+        expect["request.udp"] = 1;
+        expect["request.edns0"] = 1;
+        expect["request.dnssec_ok"] = 1;
+        expect["responses"] = 1;
+        expect["rcode.servfail"] = 1;
+        expect["qryauthans"] = is_aa_set;
+        expect["qrynoauthans"] = is_aa_set ? 0 : 1;
+        checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                                 expect);
     }
 }
@@ -661,7 +651,7 @@ TEST_F(CountersTest, incrementQrySuccess) {
     expect["qrysuccess"] = 1;
     // noauthans is also incremented
     expect["qrynoauthans"] = 1;
-    checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+    checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                             expect);
 }
 
@@ -676,7 +666,6 @@ TEST_F(CountersTest, incrementQryReferralAndNxrrset) {
     //     ----------------------
     //      false -> QryReferral
     //      true  -> QryNxrrset
-    int count_referral = 0, count_nxrrset = 0;
     for (int i = 0; i < 2; ++i) {
         const bool is_aa_set = i & 1;
         msgattrs.setRequestIPVersion(AF_INET);
@@ -692,27 +681,24 @@ TEST_F(CountersTest, incrementQryReferralAndNxrrset) {
         response.setHeaderFlag(Message::HEADERFLAG_QR);
         if (is_aa_set) {
             response.setHeaderFlag(Message::HEADERFLAG_AA);
-            ++count_nxrrset;
-        } else {
-            ++count_referral;
         }
 
         counters.inc(msgattrs, response, true);
 
         expect.clear();
-        expect["opcode.query"] = i+1;
-        expect["request.v4"] = i+1;
-        expect["request.udp"] = i+1;
-        expect["request.edns0"] = i+1;
-        expect["request.dnssec_ok"] = i+1;
-        expect["responses"] = i+1;
-        expect["rcode.noerror"] = i+1;
-        expect["qrynxrrset"] = count_nxrrset;
-        expect["qryreferral"] = count_referral;
+        expect["opcode.query"] = 1;
+        expect["request.v4"] = 1;
+        expect["request.udp"] = 1;
+        expect["request.edns0"] = 1;
+        expect["request.dnssec_ok"] = 1;
+        expect["responses"] = 1;
+        expect["rcode.noerror"] = 1;
+        expect["qrynxrrset"] = is_aa_set;
+        expect["qryreferral"] = is_aa_set ? 0 : 1;
         // qryauthans or qrynoauthans is also incremented
-        expect["qryauthans"] = count_nxrrset;
-        expect["qrynoauthans"] = count_referral;
-        checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+        expect["qryauthans"] = is_aa_set;
+        expect["qrynoauthans"] = is_aa_set ? 0 : 1;
+        checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                                 expect);
     }
 }
@@ -748,7 +734,7 @@ TEST_F(CountersTest, incrementAuthQryRej) {
     expect["authqryrej"] = 1;
     // noauthans is also incremented since AA bit is not set
     expect["qrynoauthans"] = 1;
-    checkStatisticsCounters(counters.get()->get("zones")->get("_SERVER_"),
+    checkStatisticsCountersInc(counters.get()->get("zones")->get("_SERVER_"),
                             expect);
 }
 

@@ -76,6 +76,20 @@ public:
         }
         return (counters_.at(type));
     }
+
+    /// \brief Get and clear the value of a counter item specified with \a type.
+    ///
+    /// \param type %Counter item to get the value of
+    ///
+    /// \throw isc::OutOfRange \a type is invalid
+    const Counter::Value getClear(const Counter::Type& type) {
+        if (type >= counters_.size()) {
+            isc_throw(isc::OutOfRange, "Counter type is out of range");
+        }
+        Value v = counters_.at(type);
+        counters_.at(type) = 0;
+        return (v);
+    }
 };
 
 }   // namespace statistics

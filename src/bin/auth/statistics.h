@@ -315,7 +315,7 @@ public:
     ///
     /// \return statistics data
     /// \throw std::bad_alloc Internal resource allocation fails
-    ConstItemTreePtr get() const;
+    ConstItemTreePtr get();
 };
 
 } // namespace statistics
