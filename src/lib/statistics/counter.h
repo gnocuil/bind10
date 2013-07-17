@@ -82,7 +82,7 @@ public:
     /// \param type %Counter item to get the value of
     ///
     /// \throw isc::OutOfRange \a type is invalid
-    const Counter::Value getClear(const Counter::Type& type) {
+    Counter::Value getClear(const Counter::Type& type) {
         if (type >= counters_.size()) {
             isc_throw(isc::OutOfRange, "Counter type is out of range");
         }

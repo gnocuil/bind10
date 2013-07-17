@@ -42,8 +42,8 @@ namespace {
 /// \param trees isc::data::ElementPtr to be filled in; caller has ownership of
 ///              isc::data::ElementPtr
 ///
-/// Note: This function clears all counters to send incremental/differential 
-/// values. Minus integer values indicate increments.
+/// Note: This function clears all counters to send differential values.
+/// Negative integer values indicate differences in statistics messages.
 void
 fillNodes(Counter& counter,
           const struct isc::auth::statistics::CounterSpec type_tree[],

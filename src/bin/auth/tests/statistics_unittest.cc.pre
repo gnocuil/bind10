@@ -475,7 +475,7 @@ TEST_F(CountersTest, incrementRcode) {
     std::map<std::string, int> expect;
 
     // Test all rcodes (NOERROR..BADVERS)
-    int count_all = 0, count_rcode_other = 0, count_ednsbadver = 0;
+    int count_rcode_other = 0, count_ednsbadver = 0;
     for (uint16_t i = Rcode::NOERROR().getCode(),
                   e = Rcode::BADVERS().getCode();
          i <= e;

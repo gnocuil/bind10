@@ -149,7 +149,7 @@ def merge_oldnew(old, new):
     at same name or same id. Both old data and new data should be same
     data type. This method returns the merged result.
     Additonally, this function converts incremental data into counter
-    values. Minus integer values are treated as increments..
+    values. Negative integer values are treated as differences.
     """
     # If the first arg is dict or list type, two values
     # would be merged
