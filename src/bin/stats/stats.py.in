@@ -553,14 +553,14 @@ class Stats:
                     if self.modules[owner].validate_statistics(
                         False, {_key: _val}, errors):
                         if owner not in _data:
-                            _data[owner] = { mid: { _key: _val } }
+                            _data[owner] = { mid: statistics_data[owner] }
                         elif mid not in _data[owner]:
-                            _data[owner][mid] = { _key: _val }
-                        else:
-                            # merge recursively old value and new
-                            # value each other
-                            _data[owner][mid] = \
-                                merge_oldnew(_data[owner][mid], {_key: _val})
+                            _data[owner][mid] = statistics_data[owner]
+
+                        # merge recursively old value and new
+                        # value each other
+                        _data[owner][mid] = \
+                             merge_oldnew(_data[owner][mid], {_key: _val})
                         continue
                     # the key string might be a "xx/yy/zz[0]"
                     # type. try it.
