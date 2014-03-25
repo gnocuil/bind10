@@ -301,11 +301,14 @@ bool Dhcpv6Srv::run() {
         // Unpack the packet information unless the buffer6_receive callouts
         // indicated they did it
         if (!skip_unpack) {
-            if (!query->unpack()) {
-                LOG_DEBUG(dhcp6_logger, DBG_DHCP6_DETAIL,
-                          DHCP6_PACKET_PARSE_FAIL);
-                continue;
-            }
+	//4o6: DHCPV4_RESPONSE cannot call unpack()...
+            if (query->getType() != DHCPV4_RESPONSE) {
+            	if (!query->unpack()) {
+                	LOG_DEBUG(dhcp6_logger, DBG_DHCP6_DETAIL,
+                         	 DHCP6_PACKET_PARSE_FAIL);
+                	continue;
+            	}
+	    }
         }
         // Check if received query carries server identifier matching
         // server identifier being used by the server.
@@ -389,6 +392,14 @@ bool Dhcpv6Srv::run() {
 
             case DHCPV6_INFORMATION_REQUEST:
                 rsp = processInfRequest(query);
+                break;
+            case DHCPV4_QUERY: /* 4o6 */
+                rsp = processDHCPv4Query(query);
+                break;                  
+            /* 4o6: actually we didn't receive a DHCPV4_RESPONSE, we just
+                received the content of OPTION_DHCPV4_MSG from dhcp4_srv */
+            case DHCPV4_RESPONSE:
+                rsp = processDHCPv4Response(query);
                 break;
 
             default:
@@ -2614,6 +2625,58 @@ Dhcpv6Srv::d2ClientErrorHandler(const
     /// @todo We may wish to revisit this, but for now we will simpy turn
     /// them off.
     CfgMgr::instance().getD2ClientMgr().suspendUpdates();
+}
+
+/* 4o6 */
+Pkt6Ptr
+Dhcpv6Srv::processDHCPv4Query(const Pkt6Ptr& request) {
+    OptionPtr opt = request->getOption(OPTION_DHCPV4_MSG);
+    OptionBuffer data = opt->getData();
+    int fd;
+    if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+        //failed to create socket
+        return Pkt6Ptr();
+    }
+    struct sockaddr_un addr;
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, FILENAME1);
+    addr.sun_path[0] = 0;
+    int len = strlen(FILENAME1) + offsetof(struct sockaddr_un, sun_path);
+    int result = connect(fd, (struct sockaddr*)&addr, len);
+    if (result < 0) {
+        //failed to connect
+        return Pkt6Ptr();
+    }
+    int count = write(fd, data.data(), data.size());
+    if (count != data.size()) {
+        //send error
+    }
+    close(fd);
+    uint32_t identifier = *(uint32_t*)(data.data() + 4);
+    map4o6[identifier] = request;
+
+    return Pkt6Ptr();
+}
+
+/* 4o6 */
+Pkt6Ptr
+Dhcpv6Srv::processDHCPv4Response(Pkt6Ptr& request) {
+    uint32_t identifier = *(uint32_t*)(request->data4o6_.data() + 4);
+    if (map4o6.count(identifier) && map4o6[identifier]) {
+        Pkt6Ptr reply = request;
+        request = map4o6[identifier];
+        map4o6.erase(identifier);
+        
+        copyDefaultOptions(request, reply);
+        appendDefaultOptions(request, reply);
+        appendRequestedOptions(request, reply);
+            
+        //append OPTION_DHCPV4_MSG
+        OptionPtr option(new Option(Option::V6, OPTION_DHCPV4_MSG, reply->data4o6_));
+        reply->addOption(option);
+        return (reply);
+    }
+    return Pkt6Ptr();
 }
 
 };

@@ -375,6 +375,8 @@ Dhcpv4Srv::run() {
                 skip_pack = true;
             }
         }
+            //4o6
+            rsp->is4o6 = query->is4o6;
 
         if (!skip_pack) {
             try {

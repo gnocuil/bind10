@@ -583,6 +583,9 @@ public:
     /// should be used to operate on this field.
     ClientClasses classes_;
 
+    /// 4o6: is this a dhcpv4ov6 packet?
+    int is4o6;
+
 private:
 
     /// @brief Generic method that validates and sets HW address.
