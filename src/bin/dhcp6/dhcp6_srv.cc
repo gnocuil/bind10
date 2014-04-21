@@ -45,6 +45,7 @@
 #include <util/encode/hex.h>
 #include <util/io_utilities.h>
 #include <util/range_utilities.h>
+#include <dhcp/pkt4o6.h> //used by DHCP4o6
 
 #include <boost/bind.hpp>
 #include <boost/foreach.hpp>
@@ -160,7 +161,13 @@ Dhcpv6Srv::Dhcpv6Srv(uint16_t port)
         alloc_engine_.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE, 100));
 
         /// @todo call loadLibraries() when handling configuration changes
-
+        
+        
+        /// init DHCP4o6 IPC
+        ipc_ = boost::shared_ptr<DHCP4o6IPC>(new DHCP6IPC());
+        ipc_->open();
+        IfaceMgr::instance().addExternalSocket(
+            ipc_->getSocket(), ipc_->callback);
     } catch (const std::exception &e) {
         LOG_ERROR(dhcp6_logger, DHCP6_SRV_CONSTRUCT_ERROR).arg(e.what());
         return;
@@ -253,6 +260,11 @@ bool Dhcpv6Srv::run() {
             query = receivePacket(timeout);
         } catch (const std::exception& e) {
             LOG_ERROR(dhcp6_logger, DHCP6_PACKET_RECEIVE_FAIL).arg(e.what());
+        }
+        
+        // 4o6
+        if (ipc_ && !ipc_->empty()) {
+            query = ipc_->pop()->getPkt6();
         }
 
         // Timeout may be reached or signal received, which breaks select()
@@ -390,7 +402,11 @@ bool Dhcpv6Srv::run() {
             case DHCPV6_INFORMATION_REQUEST:
                 rsp = processInfRequest(query);
                 break;
-
+                
+            case DHCPV4_QUERY: //process 4o6
+                rsp = processDHCPv4Query(query);
+                break;
+                
             default:
                 // We received a packet type that we do not recognize.
                 LOG_DEBUG(dhcp6_logger, DBG_DHCP6_BASIC, DHCP6_UNKNOWN_MSG_RECEIVED)
@@ -2345,6 +2361,30 @@ Pkt6Ptr
 Dhcpv6Srv::processInfRequest(const Pkt6Ptr& infRequest) {
     /// @todo: Implement this
     Pkt6Ptr reply(new Pkt6(DHCPV6_REPLY, infRequest->getTransid()));
+    return reply;
+}
+
+Pkt6Ptr
+Dhcpv6Srv::processDHCPv4Query(const Pkt6Ptr& query) {//4o6
+    if (!ipc_)
+        return Pkt6Ptr();
+    Pkt6Ptr reply;
+    if (ipc_->isCurrent(query)) {
+        reply = Pkt6Ptr(new Pkt6(DHCPV4_RESPONSE, query->getTransid()));
+        //TODO: should we remove this?
+        appendRequestedOptions(query, reply);
+        OptionPtr option(new Option(Option::V6,
+                                    OPTION_DHCPV4_MSG,
+                                    ipc_->current()->getDHCPv4MsgOption()));
+        reply->addOption(option);
+    } else {
+        try {
+            Pkt4o6Ptr pkt4o6(new Pkt4o6(query));
+            ipc_->sendPkt4o6(pkt4o6);
+        } catch (const Exception& ex) {
+            //TODO: logging
+        }
+    }
     return reply;
 }
 
