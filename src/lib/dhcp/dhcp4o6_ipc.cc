@@ -33,7 +33,7 @@ DHCP4o6IPC::sendPkt4o6(const Pkt4o6Ptr& pkt4o6) {
     }
     isc::util::OutputBuffer buf(0);
     const isc::util::OutputBuffer &buf4(pkt4o6->getPkt4()->getBuffer());
-    size_t len = buf4.getLength();printf("sendPkt4o6 4size=%ld\n", len);
+    size_t len = buf4.getLength();
     buf.writeData(&len, sizeof(size_t));
     buf.writeData(buf4.getData(), len);
     const isc::util::OutputBuffer &buf6(pkt4o6->getPkt6()->getBuffer());
