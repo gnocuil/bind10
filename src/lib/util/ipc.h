@@ -22,6 +22,12 @@
 namespace isc {
 namespace util {
 
+class IPCBindError : public Exception {
+public:
+    IPCBindError(const char* file, size_t line, const char* what) :
+        isc::Exception(file, line, what) ;
+};
+
 class BaseIPC {
 public:
 
