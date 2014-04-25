@@ -127,11 +127,11 @@ public:
     /// @return the number of data have been sent.
     int send(const isc::util::OutputBuffer &buf) 
         //TODO: check if connect() has been called
-        int count = sendto(socketfd_, buf.getData(), buf.getLength(), 0,
-                           (struct sockaddr*)&remote_addr_, remote_addr_len_);
-        if (count < 0) {
+        if (connect(socketfd_, (struct sockaddr *)&remote_addr_, remote_addr_len_) < 0) {
         isc_throw(IPCConnectError, "failed to connect to remote_address");
     }
+        int count = sendto(socketfd_, buf.getData(), buf.getLength(), 0,
+                           (struct sockaddr*)&remote_addr_, remote_addr_len_);
         return count;
     }
 
