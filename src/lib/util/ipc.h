@@ -28,18 +28,6 @@ public:
         isc::Exception(file, line, what) { };
 };
 
-class IPCCreatError : public Exception {
-public:
-    IPCCreatError(const char* file, size_t line, const char* what) :
-        isc::Exception(file, line, what) { };
-};
-
-class IPCConnectError : public Exception {
-public:
-    IPCConnectError(const char* file, size_t line, const char* what) :
-        isc::Exception(file, line, what) { };
-};
-
 class BaseIPC {
 public:
 
@@ -73,8 +61,9 @@ public:
         //create socket
         int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
         if (fd < 0) {
-            isc_throw(IPCCreatError, "failed to creat socket");
-        }
+        perror ("socket");
+        exit(EXIT_FAILURE);
+    }
         return socketfd_ = fd;
     }
 
@@ -93,9 +82,9 @@ public:
         local_addr_len_ = sizeof(sa_family_t) + local_name.size() + 1;
 
         //bind to local_address
-        if (bind(socketfd_, (struct sockaddr *)&local_addr_, local_addr_len_) < 0){
-            isc_throw(IPCBindError, "failed to bind to local_address");
-        }
+        if (bind(socketfd_, (struct sockaddr *)&local_addr_, local_addr_len_) < 0) {
+        isc_throw(IPCBindError, "failed to bind to local_address");
+    }
     }
 
     /// @brief set remote filename
@@ -125,10 +114,11 @@ public:
     /// Method will throw if setRemote() has not been called
     ///
     /// @return the number of data have been sent.
-    int send(const isc::util::OutputBuffer &buf) 
+    int send(const isc::util::OutputBuffer &buf) { 
         //TODO: check if connect() has been called
         if (connect(socketfd_, (struct sockaddr *)&remote_addr_, remote_addr_len_) < 0) {
-        isc_throw(IPCConnectError, "failed to connect to remote_address");
+        perror ("connect");
+        exit(EXIT_FAILURE);
     }
         int count = sendto(socketfd_, buf.getData(), buf.getLength(), 0,
                            (struct sockaddr*)&remote_addr_, remote_addr_len_);
@@ -142,6 +132,10 @@ public:
     /// @return the data have been received.
     isc::util::InputBuffer recv() {
         //TODO: check if bind() has been called
+        if(bind(socketfd_, (struct sockaddr *)&local_addr_, local_addr_len_) < 0) {
+        perror ("bind");
+        exit(EXIT_FAILURE);
+    }
         uint8_t buf[RCVBUFSIZE];
         int len = recvfrom(socketfd_, buf, RCVBUFSIZE, 0, NULL, NULL);
         if (len < 0) {
@@ -162,7 +156,7 @@ public:
     ///uint32_t getTransid() const { return (transid_); };
 
 protected:
-
+	
     /// UNIX socket value.
     int socketfd_;
     
