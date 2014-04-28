@@ -375,7 +375,7 @@ Dhcpv4Srv::run() {
                 skip_pack = true;
             }
         }
-            //4o6
+        //4o6
             rsp->is4o6 = query->is4o6;
 
         if (!skip_pack) {
@@ -968,9 +968,8 @@ Dhcpv4Srv::assignLease(const Pkt4Ptr& question, Pkt4Ptr& answer) {
         Option4ClientFqdn>(answer->getOption(DHO_FQDN));
     if (fqdn) {
         hostname = fqdn->getDomainName();
-        CfgMgr::instance().getD2ClientMgr().getUpdateDirections(*fqdn,
-                                                                fqdn_fwd,
-                                                                fqdn_rev);
+        fqdn_fwd = fqdn->getFlag(Option4ClientFqdn::FLAG_S);
+        fqdn_rev = !fqdn->getFlag(Option4ClientFqdn::FLAG_N);
     } else {
         opt_hostname = boost::dynamic_pointer_cast<OptionString>
             (answer->getOption(DHO_HOST_NAME));
@@ -1278,12 +1277,10 @@ Dhcpv4Srv::processRelease(Pkt4Ptr& release) {
 
         if (!lease) {
             // No such lease - bogus release
-            LOG_DEBUG(dhcp4_logger, DBG_DHCP4_DETAIL,
-                      DHCP4_RELEASE_FAIL_NO_LEASE)
-                      .arg(client_id ? client_id->toText() : "(no client-id)")
-                      .arg(release->getHWAddr() ?
-                           release->getHWAddr()->toText() : "(no hwaddr info)")
-                      .arg(release->getCiaddr().toText());
+            LOG_DEBUG(dhcp4_logger, DBG_DHCP4_DETAIL, DHCP4_RELEASE_FAIL_NO_LEASE)
+                .arg(release->getCiaddr().toText())
+                .arg(release->getHWAddr()->toText())
+                .arg(client_id ? client_id->toText() : "(no client-id)");
             return;
         }
 

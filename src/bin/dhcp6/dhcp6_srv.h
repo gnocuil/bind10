@@ -187,6 +187,15 @@ protected:
     void sanityCheck(const Pkt6Ptr& pkt, RequirementLevel clientid,
                      RequirementLevel serverid);
 
+    /// 4o6: process DHCPv4-query message
+    Pkt6Ptr processDHCPv4Query(const Pkt6Ptr& request);
+
+    /// 4o6: process DHCPv4-query message
+    Pkt6Ptr processDHCPv4Response(Pkt6Ptr& request);
+    
+    /// 4o6: set of received DHCPv4-query packets, indexed by identifiers in the DHCPv4 message
+    std::map<uint32_t, Pkt6Ptr> map4o6;
+
     /// @brief Processes incoming SOLICIT and returns response.
     ///
     /// Processes received SOLICIT message and verifies that its sender

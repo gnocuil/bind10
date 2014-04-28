@@ -905,7 +905,24 @@ public:
     /// @return true if there is a socket bound to the specified address.
     bool hasOpenSocket(const isc::asiolink::IOAddress& addr) const;
 
+    ///4o6 socket fd: used by dhcp4_srv to receive messages from dhcp6_srv by AF_UNIX socket
+    int fd_6to4;
+    
+    ///4o6 socket fd: used by dhcp6_srv to receive messages from dhcp4_srv by AF_UNIX socket
+    int fd_4to6;
+
+    
+    /// 4o6 receive & send
+    Pkt4Ptr receive6to4();
+    Pkt6Ptr receive4to6();
+    bool send4to6(const Pkt4Ptr& pkt);
+    
+#define FILENAME1 "DHCPv4oDHCPv6_1"
+#define FILENAME2 "DHCPv4oDHCPv6_2"
+
     // don't use private, we need derived classes in tests
+
+
 protected:
 
     /// @brief Protected constructor.

@@ -457,6 +457,9 @@ public:
     /// Having it public also solves the problem of returned reference lifetime.
     ClientClasses classes_;
 
+    //4o6: content of OPTION_DHCPV4_MSG, used by dhcp6_srv when receiving v4msg from dhcp4_srv
+    OptionBuffer data4o6_;
+
 protected:
     /// Builds on wire packet for TCP transmission.
     ///

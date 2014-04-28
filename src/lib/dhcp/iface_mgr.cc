@@ -186,6 +186,9 @@ IfaceMgr::IfaceMgr()
     } catch (const std::exception& ex) {
         isc_throw(IfaceDetectError, ex.what());
     }
+    //4o6
+    fd_6to4 = 0;
+    fd_4to6 = 0;
 }
 
 void Iface::addUnicast(const isc::asiolink::IOAddress& addr) {
@@ -222,6 +225,10 @@ void IfaceMgr::closeSockets() {
          iface != ifaces_.end(); ++iface) {
         iface->closeSockets();
     }
+    //4o6
+    if (fd_6to4 > 0)
+    if (fd_4to6 > 0)
+        close(fd_4to6);
 }
 
 void
@@ -230,6 +237,11 @@ IfaceMgr::closeSockets(const uint16_t family) {
          iface != ifaces_.end(); ++iface) {
         iface->closeSockets(family);
     }
+    //4o6
+    if (fd_6to4 > 0)
+        close(fd_6to4);
+    if (fd_4to6 > 0)
+        close(fd_4to6);
 }
 
 IfaceMgr::~IfaceMgr() {
@@ -410,6 +422,19 @@ IfaceMgr::openSockets4(const uint16_t port, const bool use_bcast,
     const bool bind_to_device = false;
 #endif
 
+    /* 4o6 - init socket
+    */
+    fd_6to4 = socket (AF_UNIX, SOCK_STREAM, 0);
+    if (fd_6to4 > 0) {
+        struct sockaddr_un server_address;
+        server_address.sun_family = AF_UNIX;
+        strcpy(server_address.sun_path, FILENAME1);
+        server_address.sun_path[0] = 0;
+        int len = strlen(FILENAME1) + offsetof(struct sockaddr_un, sun_path);
+        bind(fd_6to4, (struct sockaddr *)&server_address, len);
+        listen(fd_6to4, 5);
+    }
+
     int bcast_num = 0;
 
     for (IfaceCollection::iterator iface = ifaces_.begin();
@@ -495,6 +520,18 @@ bool
 IfaceMgr::openSockets6(const uint16_t port,
                        IfaceMgrErrorMsgCallback error_handler) {
     int count = 0;
+
+    //4o6 init socket
+    fd_4to6 = socket (AF_UNIX, SOCK_STREAM, 0);
+    if (fd_4to6 > 0) {
+        struct sockaddr_un server_address;
+        server_address.sun_family = AF_UNIX;
+        strcpy(server_address.sun_path, FILENAME2);
+        server_address.sun_path[0] = 0;
+        int len = strlen(FILENAME2) + offsetof(struct sockaddr_un, sun_path);
+        bind(fd_4to6, (struct sockaddr *)&server_address, len);
+        listen(fd_4to6, 5);
+    }
 
     for (IfaceCollection::iterator iface = ifaces_.begin();
          iface != ifaces_.end();
@@ -802,6 +839,8 @@ IfaceMgr::openSocket4(Iface& iface, const IOAddress& addr,
 
 bool
 IfaceMgr::send(const Pkt6Ptr& pkt) {
+
+
     Iface* iface = getIface(pkt->getIface());
     if (!iface) {
         isc_throw(BadValue, "Unable to send DHCPv6 message. Invalid interface ("
@@ -814,6 +853,9 @@ IfaceMgr::send(const Pkt6Ptr& pkt) {
 
 bool
 IfaceMgr::send(const Pkt4Ptr& pkt) {
+    //4o6
+    if (pkt->is4o6)
+        return send4to6(pkt);
 
     Iface* iface = getIface(pkt->getIface());
     if (!iface) {
@@ -823,6 +865,29 @@ IfaceMgr::send(const Pkt4Ptr& pkt) {
 
     // Assuming that packet filter is not NULL, because its modifier checks it.
     return (packet_filter_->send(*iface, getSocket(*pkt).sockfd_, pkt));
+}
+
+//4o6: dhcp4_srv uses this function to send pkt to dhcp6_srv
+bool
+IfaceMgr::send4to6(const Pkt4Ptr& pkt) {
+    int fd;
+    if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+        //failed to create socket
+        return false;
+    }
+    struct sockaddr_un addr;
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, FILENAME2);
+    addr.sun_path[0] = 0;
+    int len = strlen(FILENAME2) + offsetof(struct sockaddr_un, sun_path);
+    int result = connect(fd, (struct sockaddr*)&addr, len);
+    if (result < 0) {
+        //failed to connect
+        return false;
+    }
+    int count = write(fd, pkt->getBuffer().getData(), pkt->getBuffer().getLength());
+    close(fd);
+    return count;
 }
 
 
@@ -872,6 +937,14 @@ IfaceMgr::receive4(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */) {
         }
     }
 
+    /* 4o6 - use AF_UNIX socket to receive packets from dhcp6_srv
+    */
+    if (fd_6to4 > 0) {
+        if (maxfd < fd_6to4)
+            maxfd = fd_6to4;
+        FD_SET(fd_6to4, &sockets);
+    }
+
     struct timeval select_timeout;
     select_timeout.tv_sec = timeout_sec;
     select_timeout.tv_usec = timeout_usec;
@@ -918,7 +991,10 @@ IfaceMgr::receive4(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */) {
             break;
         }
     }
-
+    //4o6
+    if (!candidate && fd_6to4 > 0 && FD_ISSET(fd_6to4, &sockets)) {
+        return receive6to4();
+    }
     if (!candidate) {
         isc_throw(SocketReadError, "received data over unknown socket");
     }
@@ -926,6 +1002,37 @@ IfaceMgr::receive4(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */) {
     // Now we have a socket, let's get some data from it!
     // Assuming that packet filter is not NULL, because its modifier checks it.
     return (packet_filter_->receive(*iface, *candidate));
+}
+
+//4o6
+Pkt4Ptr
+IfaceMgr::receive6to4() {
+    uint8_t buf[IfaceMgr::RCVBUFSIZE];
+    int recv_fd = accept(fd_6to4, NULL, NULL);
+    int len = read(recv_fd, buf, IfaceMgr::RCVBUFSIZE);
+    close(recv_fd);
+    
+    Pkt4Ptr pkt = Pkt4Ptr(new Pkt4(buf, len));
+    pkt->updateTimestamp();
+    pkt->is4o6 = true;
+    
+    return pkt;
+}
+
+//4o6
+Pkt6Ptr
+IfaceMgr::receive4to6() {
+    uint8_t buf[IfaceMgr::RCVBUFSIZE];
+    int recv_fd = accept(fd_4to6, NULL, NULL);
+    int len = read(recv_fd, buf, IfaceMgr::RCVBUFSIZE);
+    close(recv_fd);
+    
+    Pkt6Ptr reply(new Pkt6(DHCPV4_RESPONSE, 0));
+    
+    reply->data4o6_.resize(len);
+    memcpy(reply->data4o6_.data(), buf, len);
+        
+    return reply;
 }
 
 Pkt6Ptr IfaceMgr::receive6(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */ ) {
@@ -975,6 +1082,14 @@ Pkt6Ptr IfaceMgr::receive6(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */
         }
     }
 
+    /* 4o6 - use AF_UNIX socket to receive packets from dhcp4_srv
+    */
+    if (fd_4to6 > 0) {
+        if (maxfd < fd_4to6)
+            maxfd = fd_4to6;
+        FD_SET(fd_4to6, &sockets);
+    }
+
     struct timeval select_timeout;
     select_timeout.tv_sec = timeout_sec;
     select_timeout.tv_usec = timeout_usec;
@@ -1021,6 +1136,11 @@ Pkt6Ptr IfaceMgr::receive6(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */
             break;
         }
     }
+
+    //4o6
+    if (!candidate && fd_4to6 > 0 && FD_ISSET(fd_4to6, &sockets)) {
+        return receive4to6();
+}
 
     if (!candidate) {
         isc_throw(SocketReadError, "received data over unknown socket");
