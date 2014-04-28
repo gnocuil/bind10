@@ -61,7 +61,7 @@ public:
         //create socket
         int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
         if (fd < 0) {
-        perror ("socket");
+        perror ("socket() failed");
         exit(EXIT_FAILURE);
     }
         return socketfd_ = fd;
@@ -132,15 +132,12 @@ public:
     /// @return the data have been received.
     isc::util::InputBuffer recv() {
         //TODO: check if bind() has been called
-        if(bind(socketfd_, (struct sockaddr *)&local_addr_, local_addr_len_) < 0) {
-        perror ("bind");
-        exit(EXIT_FAILURE);
-    }
         uint8_t buf[RCVBUFSIZE];
         int len = recvfrom(socketfd_, buf, RCVBUFSIZE, 0, NULL, NULL);
         if (len < 0) {
-        isc_throw(IPCBindError, "failed to bind to local_address");
-    }
+         perror("recv() failed");
+         exit(EXIT_FAILURE);
+    } 
         isc::util::InputBuffer ibuf(buf, len);
         return ibuf;
     }
