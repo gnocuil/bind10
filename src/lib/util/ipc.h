@@ -25,7 +25,7 @@ namespace util {
 class IPCBindError : public Exception {
 public:
     IPCBindError(const char* file, size_t line, const char* what) :
-        isc::Exception(file, line, what) { };
+    isc::Exception(file, line, what) { };
 };
 
 class BaseIPC {
@@ -117,11 +117,15 @@ public:
     int send(const isc::util::OutputBuffer &buf) { 
         //TODO: check if connect() has been called
         if (connect(socketfd_, (struct sockaddr *)&remote_addr_, remote_addr_len_) < 0) {
-        perror ("connect");
+        perror ("connect()failed");
         exit(EXIT_FAILURE);
     }
         int count = sendto(socketfd_, buf.getData(), buf.getLength(), 0,
                            (struct sockaddr*)&remote_addr_, remote_addr_len_);
+        if (count < 0) {
+        error("sendto() failed");
+        exit(EXIT_FAILURE);
+    } 
         return count;
     }
 
@@ -135,7 +139,7 @@ public:
         uint8_t buf[RCVBUFSIZE];
         int len = recvfrom(socketfd_, buf, RCVBUFSIZE, 0, NULL, NULL);
         if (len < 0) {
-         perror("recv() failed");
+         perror("recvfrom() failed");
          exit(EXIT_FAILURE);
     } 
         isc::util::InputBuffer ibuf(buf, len);
