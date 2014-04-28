@@ -15,9 +15,10 @@
 #ifndef IPC_H
 #define IPC_H
 
-#include <util/buffer.h>
+#include <buffer.h>
 
 #include <sys/un.h>
+#include <stdio.h>
 
 namespace isc {
 namespace util {
@@ -123,7 +124,7 @@ public:
         int count = sendto(socketfd_, buf.getData(), buf.getLength(), 0,
                            (struct sockaddr*)&remote_addr_, remote_addr_len_);
         if (count < 0) {
-        error("sendto() failed");
+        perror("sendto() failed");
         exit(EXIT_FAILURE);
     } 
         return count;
