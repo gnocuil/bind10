@@ -15,10 +15,8 @@
 #ifndef IPC_H
 #define IPC_H
 
-#include <buffer.h>
-
+#include <util/buffer.h>
 #include <sys/un.h>
-#include <stdio.h>
 
 namespace isc {
 namespace util {
@@ -26,6 +24,18 @@ namespace util {
 class IPCBindError : public Exception {
 public:
     IPCBindError(const char* file, size_t line, const char* what) :
+    isc::Exception(file, line, what) { };
+};
+
+class IPCConstructError : public Exception {
+public:
+    IPCConstructError(const char* file, size_t line, const char* what) :
+    isc::Exception(file, line, what) { };
+};
+
+class IPCConnectError : public Exception {
+public:
+    IPCConnectError(const char* file, size_t line, const char* what) :
     isc::Exception(file, line, what) { };
 };
 
@@ -62,8 +72,7 @@ public:
         //create socket
         int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
         if (fd < 0) {
-        perror ("socket() failed");
-        exit(EXIT_FAILURE);
+        isc_throw(IPCConstructError, "failed to creat a socket");
     }
         return socketfd_ = fd;
     }
@@ -118,15 +127,10 @@ public:
     int send(const isc::util::OutputBuffer &buf) { 
         //TODO: check if connect() has been called
         if (connect(socketfd_, (struct sockaddr *)&remote_addr_, remote_addr_len_) < 0) {
-        perror ("connect()failed");
-        exit(EXIT_FAILURE);
+        isc_throw(IPCConnectError, "failed to connect to remote_address");
     }
         int count = sendto(socketfd_, buf.getData(), buf.getLength(), 0,
                            (struct sockaddr*)&remote_addr_, remote_addr_len_);
-        if (count < 0) {
-        perror("sendto() failed");
-        exit(EXIT_FAILURE);
-    } 
         return count;
     }
 
@@ -140,8 +144,7 @@ public:
         uint8_t buf[RCVBUFSIZE];
         int len = recvfrom(socketfd_, buf, RCVBUFSIZE, 0, NULL, NULL);
         if (len < 0) {
-         perror("recvfrom() failed");
-         exit(EXIT_FAILURE);
+        isc_throw(IPCRecvError, "failed to Receive the buffer");
     } 
         isc::util::InputBuffer ibuf(buf, len);
         return ibuf;
