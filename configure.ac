@@ -913,7 +913,7 @@ if test "$MYSQL_CONFIG" != "" ; then
 fi
 
 # Solaris puts FIONREAD in filio.h
-AC_CHECK_HEADER(sys/filio.h)
+AC_CHECK_HEADERS(sys/filio.h,,,)
 
 # ... and at the shell level, so Makefile.am can take action depending on this.
 AM_CONDITIONAL(HAVE_MYSQL, test "$MYSQL_CONFIG" != "")
@@ -1466,6 +1466,7 @@ AC_CONFIG_FILES([compatcheck/Makefile
                  src/lib/dhcp_ddns/tests/Makefile
                  src/lib/dhcp/Makefile
                  src/lib/dhcpsrv/Makefile
+                 src/lib/dhcpsrv/testutils/Makefile
                  src/lib/dhcpsrv/tests/Makefile
                  src/lib/dhcpsrv/tests/test_libraries.h
                  src/lib/dhcp/tests/Makefile
