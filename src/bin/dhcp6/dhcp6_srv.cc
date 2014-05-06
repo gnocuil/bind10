@@ -265,6 +265,9 @@ bool Dhcpv6Srv::run() {
         // 4o6
         if (ipc_ && !ipc_->empty()) {
             query = ipc_->pop()->getPkt6();
+            if (!CfgMgr::instance().dhcp4o6Enabled()) {
+                query = Pkt6Ptr();
+            }
         }
 
         // Timeout may be reached or signal received, which breaks select()
@@ -2366,7 +2369,7 @@ Dhcpv6Srv::processInfRequest(const Pkt6Ptr& infRequest) {
 
 Pkt6Ptr
 Dhcpv6Srv::processDHCPv4Query(const Pkt6Ptr& query) {//4o6
-    if (!ipc_)
+    if (!ipc_ || !CfgMgr::instance().dhcp4o6Enabled())
         return Pkt6Ptr();
     Pkt6Ptr reply;
     if (ipc_->isCurrent(query)) {

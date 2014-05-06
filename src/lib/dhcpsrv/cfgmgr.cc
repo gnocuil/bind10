@@ -440,13 +440,29 @@ CfgMgr::getD2ClientMgr() {
 CfgMgr::CfgMgr()
     : datadir_(DHCP_DATA_DIR),
       all_ifaces_active_(false), echo_v4_client_id_(true),
-      d2_client_mgr_() {
+      d2_client_mgr_(),
+      dhcp4o6(false) {
     // DHCP_DATA_DIR must be set set with -DDHCP_DATA_DIR="..." in Makefile.am
     // Note: the definition of DHCP_DATA_DIR needs to include quotation marks
     // See AM_CPPFLAGS definition in Makefile.am
 }
 
 CfgMgr::~CfgMgr() {
+}
+
+bool
+CfgMgr::dhcp4o6Enabled() {
+    return dhcp4o6;
+}
+    
+void
+CfgMgr::enableDhcp4o6() {
+    dhcp4o6 = true;
+}
+
+void
+CfgMgr::disableDhcp4o6() {
+    dhcp4o6 = false;
 }
 
 }; // end of isc::dhcp namespace
