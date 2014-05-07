@@ -356,6 +356,27 @@
                 "item_description" : "port number of b10-dhcp-ddns"
             },
             {
+                "item_name": "sender-ip",
+                "item_type": "string",
+                "item_optional": true,
+                "item_default": "",
+                "item_description" : "IP address from which to send to b10-dhcp-ddns (IPv4 or IPv6)"
+            },
+            {
+                "item_name": "sender-port",
+                "item_type": "integer",
+                "item_optional": true,
+                "item_default": 0,
+                "item_description" : "port number from which to send to b10-dhcp-ddns"
+            },
+            {
+                "item_name": "max-queue-size",
+                "item_type": "integer",
+                "item_optional": true,
+                "item_default": 1024,
+                "item_description" : "maximum number of requests allowed in the send queue"
+            },
+            {
                 "item_name": "ncr-protocol",
                 "item_type": "string",
                 "item_optional": true,
@@ -414,6 +435,12 @@
                 "item_description": "Fully qualified domain-name suffix if partial name provided by client"
             },
         ]
+      },
+      { "item_name": "4o6-enable",
+        "item_type": "boolean",
+        "item_optional": true,
+        "item_default": false,
+        "item_description": "Enable DHCPv4 over DHCPv6 function"
       },
 
     ],
