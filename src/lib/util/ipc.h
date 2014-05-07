@@ -18,6 +18,7 @@
 #include <util/buffer.h>
 #include <sys/un.h>
 
+
 namespace isc {
 namespace util {
 
@@ -27,15 +28,15 @@ public:
     isc::Exception(file, line, what) { };
 };
 
-class IPCConstructError : public Exception {
+class IPCCreatError : public Exception {
 public:
-    IPCConstructError(const char* file, size_t line, const char* what) :
+    IPCCreatError(const char* file, size_t line, const char* what) :
     isc::Exception(file, line, what) { };
 };
 
-class IPCConnectError : public Exception {
+class IPCRecvError : public Exception {
 public:
-    IPCConnectError(const char* file, size_t line, const char* what) :
+    IPCRecvError(const char* file, size_t line, const char* what) :
     isc::Exception(file, line, what) { };
 };
 
@@ -72,8 +73,9 @@ public:
         //create socket
         int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
         if (fd < 0) {
-        isc_throw(IPCConstructError, "failed to creat a socket");
-    }
+            isc_throw(IPCCreatError, "failed to creat a socket");
+    	}
+
         return socketfd_ = fd;
     }
 
@@ -93,8 +95,8 @@ public:
 
         //bind to local_address
         if (bind(socketfd_, (struct sockaddr *)&local_addr_, local_addr_len_) < 0) {
-        isc_throw(IPCBindError, "failed to bind to local_address");
-    }
+            isc_throw(IPCBindError, "failed to bind to local_address");
+    	}
     }
 
     /// @brief set remote filename
@@ -126,9 +128,6 @@ public:
     /// @return the number of data have been sent.
     int send(const isc::util::OutputBuffer &buf) { 
         //TODO: check if connect() has been called
-        if (connect(socketfd_, (struct sockaddr *)&remote_addr_, remote_addr_len_) < 0) {
-        isc_throw(IPCConnectError, "failed to connect to remote_address");
-    }
         int count = sendto(socketfd_, buf.getData(), buf.getLength(), 0,
                            (struct sockaddr*)&remote_addr_, remote_addr_len_);
         return count;
@@ -144,8 +143,8 @@ public:
         uint8_t buf[RCVBUFSIZE];
         int len = recvfrom(socketfd_, buf, RCVBUFSIZE, 0, NULL, NULL);
         if (len < 0) {
-        isc_throw(IPCRecvError, "failed to Receive the buffer");
-    } 
+            isc_throw(IPCRecvError, "failed to Receive the buffer");
+    	} 
         isc::util::InputBuffer ibuf(buf, len);
         return ibuf;
     }
