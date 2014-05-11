@@ -58,6 +58,8 @@ public:
     OptionBuffer getDHCPv4MsgOption();
     
 protected:
+    void setPkt4LocalAddr();
+    
     Pkt4Ptr pkt4_;
     Pkt6Ptr pkt6_;    
 };// pkt4o6 class
