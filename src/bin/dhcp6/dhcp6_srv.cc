@@ -2374,12 +2374,18 @@ Dhcpv6Srv::processDHCPv4Query(const Pkt6Ptr& query) {//4o6
     Pkt6Ptr reply;
     if (ipc_->isCurrent(query)) {
         reply = Pkt6Ptr(new Pkt6(DHCPV4_RESPONSE, query->getTransid()));
+
         //TODO: should we remove this?
         appendRequestedOptions(query, reply);
         OptionPtr option(new Option(Option::V6,
                                     OPTION_DHCPV4_MSG,
                                     ipc_->current()->getDHCPv4MsgOption()));
         reply->addOption(option);
+
+        //Add relay info
+        if (!query->relay_info_.empty()) {
+            reply->copyRelayInfo(query);
+        }
     } else {
         try {
             Pkt4o6Ptr pkt4o6(new Pkt4o6(query));
