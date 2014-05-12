@@ -26,16 +26,12 @@ namespace isc {
 namespace dhcp {
           
 Pkt4o6::Pkt4o6(const uint8_t* data4, size_t len4,
-               const uint8_t* data6, size_t len6, std::string json)
+               const uint8_t* data6, size_t len6)
        :pkt4_(new Pkt4(data4, len4)),
         pkt6_(new Pkt6(data6, len6))
 {
-    setJson(json);
-
-    pkt6_->unpack();//call unpack() to get correct transid
     pkt6_->repack();//call repack() to generate outputBuffer
     pkt4_->repack();//call repack() to generate outputBuffer
-    setPkt4LocalAddr();//set localAddr according to U flag in transid field
 }
 
 Pkt4o6::Pkt4o6(const Pkt6Ptr& pkt6) {
@@ -60,10 +56,13 @@ Pkt4o6::Pkt4o6(const Pkt4o6Ptr& pkt4o6, const Pkt4Ptr& pkt4) {
 
 void
 Pkt4o6::setPkt4LocalAddr() {
-    if (pkt6_->getTransid() & 0x800000) {//U flag is 1, pkt4 sent unicast
-        pkt4_->setLocalAddr(isc::asiolink::IOAddress("8.8.8.8"));
-    } else {//u flag is 0, pkt4 sent to broadcast
-        pkt4_->setLocalAddr(isc::asiolink::IOAddress("255.255.255.255"));
+    if (pkt4_ && pkt6_) {
+        pkt6_->unpack();
+        if (pkt6_->getTransid() & 0x800000) {//U flag is 1, pkt4 sent unicast
+            pkt4_->setLocalAddr(isc::asiolink::IOAddress("8.8.8.8"));
+        } else {//u flag is 0, pkt4 sent to broadcast
+            pkt4_->setLocalAddr(isc::asiolink::IOAddress("255.255.255.255"));
+        }
     }
 }
 

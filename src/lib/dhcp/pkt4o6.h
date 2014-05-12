@@ -41,7 +41,7 @@ typedef boost::shared_ptr<Pkt4o6> Pkt4o6Ptr;
 class Pkt4o6{
 public:
     Pkt4o6(const uint8_t* data4, size_t len4,
-           const uint8_t* data6, size_t len6, std::string json);
+           const uint8_t* data6, size_t len6);
 /// @Constructor, Returns 4o6 packet decapsulated from v6 packet.
 ///
 /// @param pkt received v6 packet.
@@ -57,9 +57,9 @@ public:
     
     OptionBuffer getDHCPv4MsgOption();
     
-protected:
     void setPkt4LocalAddr();
     
+protected:
     Pkt4Ptr pkt4_;
     Pkt6Ptr pkt6_;    
 };// pkt4o6 class

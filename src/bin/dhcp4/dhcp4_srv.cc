@@ -186,6 +186,10 @@ Dhcpv4Srv::run() {
         // 4o6
         if (ipc_ && !ipc_->empty()) {
             query = ipc_->pop()->getPkt4();
+
+            //set Pkt4's localAddr according to U flag in Pkt6's transid field
+            ipc_->current()->setPkt4LocalAddr();
+            
             if (!CfgMgr::instance().dhcp4o6Enabled()) {
                 query = Pkt4Ptr();
             }

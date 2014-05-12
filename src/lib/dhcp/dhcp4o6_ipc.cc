@@ -61,7 +61,8 @@ DHCP4o6IPC::recvPkt4o6() {
     buf.readData(&len_json, sizeof(size_t));
     buf.readData(buf_json, len_json);
     
-    Pkt4o6Ptr p(new Pkt4o6(buf4, len4, buf6, len6, buf_json));
+    Pkt4o6Ptr p(new Pkt4o6(buf4, len4, buf6, len6));
+    p->setJson(buf_json);
     queue_.push(p);
 }
 
