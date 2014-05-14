@@ -22,8 +22,6 @@ using namespace isc::util;
 
 namespace {
 
-// Make sure the test is large enough and does not fit into one
-// read or write request
 
 class IPCTest : public ::testing::Test {
     public:
