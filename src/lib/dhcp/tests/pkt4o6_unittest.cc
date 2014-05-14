@@ -44,9 +44,6 @@ using namespace isc;
 using namespace isc::asiolink;
 using namespace isc::dhcp;
 using namespace isc::util;
-// Don't import the entire boost namespace.  It will unexpectedly hide uint8_t
-// for some systems.
-using boost::scoped_ptr;
 
 namespace {
 
@@ -150,10 +147,10 @@ TEST_F(Pkt4o6Test, jsontest) {
         testData[i] = i;
     }
     
-	Pkt4Ptr pktv4(new Pkt4(testData,250));
-	pktv4->repack();
-	isc::util::OutputBuffer tmp = pktv4->getBuffer();
-	OptionBuffer opt_buf((uint8_t*)tmp.getData(),
+    Pkt4Ptr pktv4(new Pkt4(testData,250));
+    pktv4->repack();
+    isc::util::OutputBuffer tmp = pktv4->getBuffer();
+    OptionBuffer opt_buf((uint8_t*)tmp.getData(),
 	                     (uint8_t*)tmp.getData()+tmp.getLength());
     OptionPtr opt = OptionPtr(new Option(Option::V6, 
                                         OPTION_DHCPV4_MSG, opt_buf));
