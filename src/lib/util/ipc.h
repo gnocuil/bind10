@@ -40,6 +40,12 @@ public:
     isc::Exception(file, line, what) { };
 };
 
+class IPCSendError : public Exception {
+public:
+    IPCSendError(const char* file, size_t line, const char* what) :
+    isc::Exception(file, line, what) { };
+};
+
 class BaseIPC {
 public:
 
@@ -73,7 +79,7 @@ public:
         //create socket
         int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
         if (fd < 0) {
-            isc_throw(IPCCreatError, "failed to creat a socket");
+            isc_throw(IPCCreatError, "BaseIPC failed to creat a socket");
     	}
 
         return socketfd_ = fd;
@@ -95,7 +101,7 @@ public:
 
         //bind to local_address
         if (bind(socketfd_, (struct sockaddr *)&local_addr_, local_addr_len_) < 0) {
-            isc_throw(IPCBindError, "failed to bind to local_address");
+            isc_throw(IPCBindError, "failed to bind to local address: " + local_name);
     	}
     }
 
@@ -127,7 +133,9 @@ public:
     ///
     /// @return the number of data have been sent.
     int send(const isc::util::OutputBuffer &buf) { 
-        //TODO: check if connect() has been called
+        if (remote_addr_len_ == 0) {
+            isc_throw(IPCSendError, "Remote address unset, call setRemote() first");
+        }
         int count = sendto(socketfd_, buf.getData(), buf.getLength(), 0,
                            (struct sockaddr*)&remote_addr_, remote_addr_len_);
         return count;
@@ -139,11 +147,13 @@ public:
     ///
     /// @return the data have been received.
     isc::util::InputBuffer recv() {
-        //TODO: check if bind() has been called
+        if (local_addr_len_ == 0) {
+            isc_throw(IPCRecvError, "Local address unset, call bindSocket() first");
+        }
         uint8_t buf[RCVBUFSIZE];
         int len = recvfrom(socketfd_, buf, RCVBUFSIZE, 0, NULL, NULL);
         if (len < 0) {
-            isc_throw(IPCRecvError, "failed to Receive the buffer");
+            isc_throw(IPCRecvError, "BaseIPC failed on recvfrom");
     	} 
         isc::util::InputBuffer ibuf(buf, len);
         return ibuf;
