@@ -17,6 +17,8 @@
 
 #include <util/buffer.h>
 #include <sys/un.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
 
 namespace isc {
@@ -98,6 +100,8 @@ public:
         local_addr_.sun_family = AF_UNIX;
         strcpy(&local_addr_.sun_path[1], local_name.c_str());
         local_addr_len_ = sizeof(sa_family_t) + local_name.size() + 1;
+        
+        unlink(local_addr_.sun_path);
 
         //bind to local_address
         if (bind(socketfd_, (struct sockaddr *)&local_addr_, local_addr_len_) < 0) {
