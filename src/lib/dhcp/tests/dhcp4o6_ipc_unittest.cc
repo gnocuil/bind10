@@ -53,133 +53,114 @@ class DHCP4o6_IPC : public ::testing::Test {
 
 };
 
-// Test we use DHCP6IPC to send, DHCP4IPC to receive
-TEST_F(DHCP4o6_IPC, v4send_v6receive) {
+const int dataLength = 250;
+uint8_t testData[dataLength];
 
-    //create Pkt4o6
-    uint8_t data[] = { 0, 1, 2, 3, 4, 5 };
-    Pkt6Ptr pktv6(new Pkt6(data, sizeof(data)));
-    pktv6->setRemotePort(546);
+Pkt4o6Ptr CreatePkt4o6_case1(){
+    // test data array
+   
+    for (int i = 0; i < dataLength; i++) {
+        testData[i] = i;
+    }
+	//construct a Pkt4o6
+	Pkt4Ptr pktv4(new Pkt4(testData,dataLength));
+    Pkt6Ptr pktv6(new Pkt6(testData,dataLength));
+	pktv6->setRemotePort(546);
     pktv6->setRemoteAddr(IOAddress("fe80::21e:8cff:fe9b:7349"));
     pktv6->setLocalPort(0);
     pktv6->setLocalAddr(IOAddress("ff02::1:2"));
     pktv6->setIndex(2);
     pktv6->setIface("eth0");
-    uint8_t testData[250];
-    for (int i = 0; i < 250; i++) {
-        testData[i] = i;
-    }
-    
-    Pkt4Ptr pktv4(new Pkt4(testData,250));
-    pktv4->repack();
-    isc::util::OutputBuffer tmp = pktv4->getBuffer();
-    OptionBuffer opt_buf((uint8_t*)tmp.getData(),
-	                     (uint8_t*)tmp.getData()+tmp.getLength());
-    OptionPtr opt = OptionPtr(new Option(Option::V6, 
-                                        OPTION_DHCPV4_MSG, opt_buf));
+	pktv4->repack();
+	isc::util::OutputBuffer tmp = pktv4->getBuffer();
+    OptionBuffer p((uint8_t*)tmp.getData(),
+                   (uint8_t*)tmp.getData()+tmp.getLength());
+    OptionPtr opt = OptionPtr(new Option(Option::V6, OPTION_DHCPV4_MSG, p));
     pktv6->addOption(opt);
 	Pkt4o6Ptr pkt4o6(new Pkt4o6(pktv6));
-	//end of create Pkt4o6
+	return pkt4o6;
+}
+
+// Test we use DHCP6IPC to send, DHCP4IPC to receive and vice-versa
+TEST_F(DHCP4o6_IPC, v4send_v6receive) {
+    //create Pkt4o6
+	Pkt4o6Ptr pkt4o6 = CreatePkt4o6_case1();
 
     std::string json = pkt4o6->getJson();
     DHCP4IPC ipc4;
     DHCP6IPC ipc6;
     ipc4.open();
     ipc6.open();
-    ipc4.sendPkt4o6(pkt4o6);
-    ipc6.recvPkt4o6();
-    Pkt4o6Ptr recvmsg = ipc6.pop();
+    EXPECT_NO_THROW(
+       ipc4.sendPkt4o6(pkt4o6); 
+    );
+    EXPECT_NO_THROW(
+       ipc6.sendPkt4o6(pkt4o6); 
+    );    
+    EXPECT_NO_THROW(
+       ipc6.recvPkt4o6();
+    );   
+    EXPECT_NO_THROW(
+       ipc4.recvPkt4o6();
+    );   
+    Pkt4o6Ptr recvmsg1 = ipc6.pop();
+    Pkt4o6Ptr recvmsg2 = ipc4.pop();
     ipc4.closeSocket();
     ipc6.closeSocket();
-    ASSERT_EQ(json, recvmsg->getJson());//josn must be equal
-    const OutputBuffer &buf4(recvmsg->getPkt4()->getBuffer());
-    size_t len = buf4.getLength();
-    ASSERT_EQ(250,len);//length of data in pkt4 must be equal
-    const OutputBuffer &buf6(recvmsg->getPkt6()->getBuffer());
-    len = buf6.getLength();
-    ASSERT_EQ(6,len);//length of data in pkt6 must be equal
+    ASSERT_EQ(json, recvmsg1->getJson());//josn must be equal
+    const OutputBuffer &buf4_1(recvmsg1->getPkt4()->getBuffer());
+    size_t len = buf4_1.getLength();
+    ASSERT_EQ(dataLength,len);//length of data in pkt4 must be equal
+    const OutputBuffer &buf6_1(recvmsg1->getPkt6()->getBuffer());
+    len = buf6_1.getLength();
+    ASSERT_EQ(dataLength,len);//length of data in pkt6 must be equal
     
-    uint8_t *pkt4data = (uint8_t*)buf4.getData();
-    for(int i = 0;i < 250 ;i++){//test data in pkt4
-	    EXPECT_EQ(pkt4data[i],testData[i]);
+    uint8_t *pkt4data1 = (uint8_t*)buf4_1.getData();
+    for(int i = 0;i < dataLength ;i++){//test data in pkt4
+	    EXPECT_EQ(pkt4data1[i],testData[i]);
     }
-    uint8_t *pkt6data = (uint8_t*)buf6.getData();
-    for(int i = 0;i < 6 ;i++){//test data in pkt6
-	    EXPECT_EQ(pkt6data[i],data[i]);
+    uint8_t *pkt6data1 = (uint8_t*)buf6_1.getData();
+    for(int i = 0;i < dataLength ;i++){//test data in pkt6
+	    EXPECT_EQ(pkt6data1[i],testData[i]);
+    }
+    
+    ASSERT_EQ(json, recvmsg2->getJson());//josn must be equal
+    const OutputBuffer &buf4_2(recvmsg2->getPkt4()->getBuffer());
+    len = buf4_2.getLength();
+    ASSERT_EQ(dataLength,len);//length of data in pkt4 must be equal
+    const OutputBuffer &buf6_2(recvmsg2->getPkt6()->getBuffer());
+    len = buf6_2.getLength();
+    ASSERT_EQ(dataLength,len);//length of data in pkt6 must be equal
+    
+    uint8_t *pkt4data2 = (uint8_t*)buf4_2.getData();
+    for(int i = 0;i < dataLength ;i++){//test data in pkt4
+	    EXPECT_EQ(pkt4data2[i],testData[i]);
+    }
+    uint8_t *pkt6data2 = (uint8_t*)buf6_2.getData();
+    for(int i = 0;i < dataLength ;i++){//test data in pkt6
+	    EXPECT_EQ(pkt6data2[i],testData[i]);
     }
 }
 
-
-// Test we use DHCP4IPC to send, DHCP6IPC to receive
-TEST_F(DHCP4o6_IPC, v6send_v4receive) {
-  
-    //create Pkt4o6
-    uint8_t data[] = { 0, 1, 2, 3, 4, 5 };
-    Pkt6Ptr pktv6(new Pkt6(data, sizeof(data)));
-    pktv6->setRemotePort(546);
-    pktv6->setRemoteAddr(IOAddress("fe80::21e:8cff:fe9b:7349"));
-    pktv6->setLocalPort(0);
-    pktv6->setLocalAddr(IOAddress("ff02::1:2"));
-    pktv6->setIndex(2);
-    pktv6->setIface("eth0");
-    
-    //Create Pkt4
-    uint8_t testData[250];
-    for (int i = 0; i < 250; i++) {
-        testData[i] = i;
-    }
-    Pkt4Ptr pktv4(new Pkt4(testData,250));
-    pktv4->repack();
-    isc::util::OutputBuffer tmp = pktv4->getBuffer();
-    OptionBuffer opt_buf((uint8_t*)tmp.getData(),
-	                     (uint8_t*)tmp.getData()+tmp.getLength());
-    OptionPtr opt = OptionPtr(new Option(Option::V6, 
-                                        OPTION_DHCPV4_MSG, opt_buf));
-    pktv6->addOption(opt);
-	Pkt4o6Ptr pkt4o6(new Pkt4o6(pktv6));
-	//end of create Pkt4o6
-    std::string josn = pkt4o6->getJson();
-    DHCP4IPC ipcv4;
-    DHCP6IPC ipcv6;
-    ipcv4.open();
-    ipcv6.open();
-    ipcv6.sendPkt4o6(pkt4o6);
-    ipcv4.recvPkt4o6(); 
-    Pkt4o6Ptr recvmsg = ipcv4.pop();
-    ipcv4.closeSocket();
-    ipcv6.closeSocket();
-    ASSERT_EQ(josn, recvmsg->getJson());//josn must be equal
-    
-    const OutputBuffer &buf4(recvmsg->getPkt4()->getBuffer());
-    size_t len = buf4.getLength();
-    ASSERT_EQ(250,len);//length of data in pkt4 must be equal
-    const OutputBuffer &buf6(recvmsg->getPkt6()->getBuffer());
-    len = buf6.getLength();
-    ASSERT_EQ(6,len);//length of data in pkt6 must be equal
-    uint8_t *pkt4data = (uint8_t*)buf4.getData();
-    for(int i = 0;i < 250 ;i++){
-	    EXPECT_EQ(pkt4data[i],testData[i]);
-    }
-    uint8_t *pkt6data = (uint8_t*)buf6.getData();
-    for(int i = 0;i < 6 ;i++){
-	    EXPECT_EQ(pkt6data[i],data[i]);
-    }
-}
 
 TEST_F(DHCP4o6_IPC, exceptiontest){
     //we use a empty Pkt4o6 to be sent,expect a exception
     DHCP4IPC ipc4;
-    ipc4.open();
     const Pkt4o6Ptr pkt4o6;
     
-    //pkt4o6 is empty, we should throw.
-    EXPECT_ANY_THROW(ipc4.sendPkt4o6(pkt4o6));
+    //directly send without open. pkt4o6 is empty, we should throw.
+    EXPECT_ANY_THROW(
+        ipc4.sendPkt4o6(pkt4o6);
+    );
     
-    DHCP6IPC ipc6;
-    ipc6.open();
+    DHCP6IPC ipc6;  
+    //directly receive without open. 
+    EXPECT_ANY_THROW(
+       ipc6.recvPkt4o6();
+    );   
     const Pkt4o6Ptr pkt4o6_ = ipc6.pop();//queue in ipc6 is empty now
     EXPECT_EQ(true,ipc6.empty());
-    EXPECT_ANY_THROW(ipc6.sendPkt4o6(pkt4o6_));
+   
     
 }
 
