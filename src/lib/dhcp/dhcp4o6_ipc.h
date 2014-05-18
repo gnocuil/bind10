@@ -131,10 +131,10 @@ protected:
 };//DHCP4o6IPC class
 
 // A filename used for DHCPv4 server --> DHCPv6 server
-#define FILENAME_4TO6 "DHCPv4_over_DHCPv6_v4tov6";
+#define FILENAME_4TO6 "DHCPv4_over_DHCPv6_v4tov6"
 
 // A filename used for DHCPv4 server <-- DHCPv6 server
-#define FILENAME_6TO4 "DHCPv4_over_DHCPv6_v6tov4";
+#define FILENAME_6TO4 "DHCPv4_over_DHCPv6_v6tov4"
 
 /// @brief IPC class actually used in DHCPv4 server
 class DHCP4IPC : public DHCP4o6IPC {
