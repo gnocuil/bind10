@@ -25,22 +25,20 @@ namespace {
 
 class IPCTest : public ::testing::Test {
     public:
+        BaseIPC ipc;
         IPCTest()
         {
-
         }
 };
 
 // Test BaseIPC constructor
 TEST_F(IPCTest, constructor) {
-	BaseIPC ipc;
 	EXPECT_EQ(-1, ipc.getSocket());
 }
 
 
 // Test openSocket function
 TEST_F(IPCTest, openSocket) {
-	BaseIPC ipc;
 	int fd = ipc.openSocket();
 	
 	EXPECT_EQ(fd, ipc.getSocket());

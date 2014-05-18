@@ -20,34 +20,40 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#include <errno.h>
 
 namespace isc {
 namespace util {
 
+/// @brief Exception thrown when BaseIPC bindSocket() failed.
 class IPCBindError : public Exception {
 public:
     IPCBindError(const char* file, size_t line, const char* what) :
     isc::Exception(file, line, what) { };
 };
 
-class IPCCreatError : public Exception {
+/// @brief Exception thrown when BaseIPC openSocket() failed.
+class IPCSocketError : public Exception {
 public:
-    IPCCreatError(const char* file, size_t line, const char* what) :
+    IPCSocketError(const char* file, size_t line, const char* what) :
     isc::Exception(file, line, what) { };
 };
 
+/// @brief Exception thrown when BaseIPC recv() failed.
 class IPCRecvError : public Exception {
 public:
     IPCRecvError(const char* file, size_t line, const char* what) :
     isc::Exception(file, line, what) { };
 };
 
+/// @brief Exception thrown when BaseIPC send() failed.
 class IPCSendError : public Exception {
 public:
     IPCSendError(const char* file, size_t line, const char* what) :
     isc::Exception(file, line, what) { };
 };
 
+/// @brief IPC tool based on UNIX domain socket
 class BaseIPC {
 public:
 
@@ -81,7 +87,7 @@ public:
         //create socket
         int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
         if (fd < 0) {
-            isc_throw(IPCCreatError, "BaseIPC failed to creat a socket");
+            isc_throw(IPCSocketError, "BaseIPC failed to creat a socket");
     	}
 
         return socketfd_ = fd;
@@ -133,7 +139,9 @@ public:
     /// 
     /// @param buf the date are prepared to send.
     ///
+    /// setRemote() MUST be called before calling this function
     /// Method will throw if setRemote() has not been called
+    /// or sendto() failed
     ///
     /// @return the number of data have been sent.
     int send(const isc::util::OutputBuffer &buf) { 
@@ -142,12 +150,18 @@ public:
         }
         int count = sendto(socketfd_, buf.getData(), buf.getLength(), 0,
                            (struct sockaddr*)&remote_addr_, remote_addr_len_);
+        if (count < 0) {
+            isc_throw(IPCSendError, "BaseIPC failed on sendto: "
+                                    << strerror(errno));
+        }
         return count;
     }
 
     /// @brief receive message from a host that the same socket are binding.
     ///
-    /// Method will throw if bindSocket() has not been called 
+    /// bindSocket() MUST be called before calling this function
+    /// Method will throw if bindSocket() has not been called
+    /// or recvfrom() failed
     ///
     /// @return the data have been received.
     isc::util::InputBuffer recv() {
@@ -157,7 +171,8 @@ public:
         uint8_t buf[RCVBUFSIZE];
         int len = recvfrom(socketfd_, buf, RCVBUFSIZE, 0, NULL, NULL);
         if (len < 0) {
-            isc_throw(IPCRecvError, "BaseIPC failed on recvfrom");
+            isc_throw(IPCRecvError, "BaseIPC failed on recvfrom: "
+                                    << strerror(errno));
     	} 
         isc::util::InputBuffer ibuf(buf, len);
         return ibuf;
@@ -167,11 +182,6 @@ public:
     /// 
     /// @return the socket value this class is using.
     int getSocket() { return socketfd_; }
-
-    /// @briefReturns value of transaction-id field
-    ///
-    /// @return transaction-id
-    ///uint32_t getTransid() const { return (transid_); };
 
 protected:
 	
