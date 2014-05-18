@@ -47,6 +47,8 @@ public:
         return current_ && pkt6 == current_->getPkt6();
     }
     Pkt4o6Ptr current() { return current_; }
+    static void enable();
+    static void disable();
 protected:
     virtual std::string getLocalFilename() const = 0;
     virtual std::string getRemoteFilename() const = 0;

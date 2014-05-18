@@ -167,8 +167,6 @@ Dhcpv6Srv::Dhcpv6Srv(uint16_t port)
         try {
             ipc_ = boost::shared_ptr<DHCP4o6IPC>(new DHCP6IPC());
             ipc_->open();
-            IfaceMgr::instance().addExternalSocket(
-                ipc_->getSocket(), ipc_->callback);
         } catch (const Exception &e) {
             LOG_ERROR(dhcp6_logger, DHCP6_IPC_CONSTRUCT_ERROR).arg(e.what());
             ipc_ = boost::shared_ptr<DHCP4o6IPC>();

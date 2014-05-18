@@ -529,7 +529,7 @@ private:
     D2ClientMgr d2_client_mgr_;
     
     /// flag of whether DHCPv4 over DHCPv6 is enabled
-    bool dhcp4o6;
+    bool dhcp4o6_enabled_;
 };
 
 } // namespace isc::dhcp

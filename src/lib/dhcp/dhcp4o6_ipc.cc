@@ -13,6 +13,7 @@
 // PERFORMANCE OF THIS SOFTWARE.
 
 #include <dhcp/dhcp4o6_ipc.h>
+#include <dhcp/iface_mgr.h>
 
 namespace isc {
 namespace dhcp {
@@ -80,6 +81,21 @@ DHCP4o6IPC::pop() {
     current_ = queue_.front();
     queue_.pop();
     return current_;
+}
+
+void
+DHCP4o6IPC::enable() {
+    if (instance_) {
+        IfaceMgr::instance().addExternalSocket(instance_->getSocket(),
+                                               instance_->callback);
+    }
+}
+
+void
+DHCP4o6IPC::disable() {
+    if (instance_) {
+        IfaceMgr::instance().deleteExternalSocket(instance_->getSocket());
+    }
 }
 
 } // isc::dhcp namespace

@@ -17,6 +17,7 @@
 #include <dhcp/libdhcp++.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/dhcpsrv_log.h>
+#include <dhcp/dhcp4o6_ipc.h>
 #include <string>
 
 using namespace isc::asiolink;
@@ -441,7 +442,7 @@ CfgMgr::CfgMgr()
     : datadir_(DHCP_DATA_DIR),
       all_ifaces_active_(false), echo_v4_client_id_(true),
       d2_client_mgr_(),
-      dhcp4o6(false) {
+      dhcp4o6_enabled_(false) {
     // DHCP_DATA_DIR must be set set with -DDHCP_DATA_DIR="..." in Makefile.am
     // Note: the definition of DHCP_DATA_DIR needs to include quotation marks
     // See AM_CPPFLAGS definition in Makefile.am
@@ -452,17 +453,19 @@ CfgMgr::~CfgMgr() {
 
 bool
 CfgMgr::dhcp4o6Enabled() {
-    return dhcp4o6;
+    return dhcp4o6_enabled_;
 }
     
 void
 CfgMgr::enableDhcp4o6() {
-    dhcp4o6 = true;
+    dhcp4o6_enabled_ = true;
+    DHCP4o6IPC::enable();
 }
 
 void
 CfgMgr::disableDhcp4o6() {
-    dhcp4o6 = false;
+    dhcp4o6_enabled_ = false;
+    DHCP4o6IPC::disable();
 }
 
 }; // end of isc::dhcp namespace
