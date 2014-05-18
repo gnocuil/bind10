@@ -106,8 +106,6 @@ public:
         local_addr_.sun_family = AF_UNIX;
         strcpy(&local_addr_.sun_path[1], local_name.c_str());
         local_addr_len_ = sizeof(sa_family_t) + local_name.size() + 1;
-        
-        unlink(local_addr_.sun_path);
 
         //bind to local_address
         if (bind(socketfd_, (struct sockaddr *)&local_addr_, local_addr_len_) < 0) {
@@ -130,7 +128,7 @@ public:
 
     /// @brief Close opened socket.
     void closeSocket() {
-        if(socketfd_ > 0)
+        if(socketfd_ >= 0)
             close(socketfd_);
         socketfd_ = -1;
     }
