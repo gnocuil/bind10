@@ -130,12 +130,15 @@ Dhcpv4Srv::Dhcpv4Srv(uint16_t port, const char* dbconfig, const bool use_bcast,
         /// @todo call loadLibraries() when handling configuration changes
 
         /// init DHCP4o6 IPC
-        
-        ipc_ = boost::shared_ptr<DHCP4o6IPC>(new DHCP4IPC());
-        ipc_->open();
-        IfaceMgr::instance().addExternalSocket(
-            ipc_->getSocket(), ipc_->callback);
-
+        try{
+            ipc_ = boost::shared_ptr<DHCP4o6IPC>(new DHCP4IPC());
+            ipc_->open();
+            IfaceMgr::instance().addExternalSocket(
+                ipc_->getSocket(), ipc_->callback);
+        } catch (const Exception &e) {
+            LOG_ERROR(dhcp4_logger, DHCP4_IPC_CONSTRUCT_ERROR).arg(e.what());
+            ipc_ = boost::shared_ptr<DHCP4o6IPC>();
+        }
         
     } catch (const std::exception &e) {
         LOG_ERROR(dhcp4_logger, DHCP4_SRV_CONSTRUCT_ERROR).arg(e.what());
