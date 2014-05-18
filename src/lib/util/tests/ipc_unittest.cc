@@ -25,7 +25,6 @@ namespace {
 
 class IPCTest : public ::testing::Test {
     public:
-        BaseIPC ipc;
         IPCTest()
         {
         }
@@ -33,41 +32,89 @@ class IPCTest : public ::testing::Test {
 
 // Test BaseIPC constructor
 TEST_F(IPCTest, constructor) {
+    BaseIPC ipc;
 	EXPECT_EQ(-1, ipc.getSocket());
 }
 
 
 // Test openSocket function
 TEST_F(IPCTest, openSocket) {
-	int fd = ipc.openSocket();
+    BaseIPC ipc;
+	int fd;
+	EXPECT_NO_THROW(
+    	fd = ipc.openSocket();
+    );
 	
 	EXPECT_EQ(fd, ipc.getSocket());
 }
 
-
-// Test bindSocket function
-TEST_F(IPCTest, send_recv) {
-	BaseIPC local,remote;
-	uint8_t data[] = { 1, 2, 3, 4, 5, 6 };
-	local.openSocket();
-	remote.openSocket();
-	local.bindSocket("server");
-	remote.setRemote("server");
-	OutputBuffer sendmsg(6);
-	for(int i = 0;i < 6;i++){
-		sendmsg.writeUint8(data[i]);
+// Test BaseIPC bidirectional data sending and receiving
+TEST_F(IPCTest, bidirectionalTransmission) {
+	BaseIPC ipc1;
+	BaseIPC ipc2;
+	const int LEN1 = 100;
+	const int LEN2 = 200;
+	uint8_t data1[LEN2];
+	uint8_t data2[LEN2];
+	uint8_t data3[LEN2];
+	uint8_t data4[LEN2];
+	for (int i = 0; i < LEN2; ++i) {
+	    data1[i] = i;
+	    data2[i] = -i;
 	}
-	remote.send(sendmsg);
+	EXPECT_NO_THROW(
+    	ipc1.openSocket();
+    );
+	EXPECT_NO_THROW(
+    	ipc2.openSocket();
+    );
+	EXPECT_NO_THROW(
+    	ipc1.bindSocket("test_ipc_2to1");
+    );
+	EXPECT_NO_THROW(
+    	ipc2.bindSocket("test_ipc_1to2");
+    );
+	EXPECT_NO_THROW(
+    	ipc1.setRemote("test_ipc_1to2");
+    );
+	EXPECT_NO_THROW(
+    	ipc2.setRemote("test_ipc_2to1");
+    );
+      
+	OutputBuffer sendbuf1(LEN1), sendbuf2(LEN2);
+	sendbuf1.writeData((void*)data1, LEN1);
+	sendbuf2.writeData((void*)data2, LEN2);
+	EXPECT_NO_THROW(
+	    ipc1.send(sendbuf1);
+	);
+	EXPECT_NO_THROW(
+    	ipc2.send(sendbuf2);
+    );
 	
-	//now localIPC receive some data from remoteIPC
-	InputBuffer recvmsg= local.recv();
+	InputBuffer recvbuf1(0, 0), recvbuf2(0, 0);
+	EXPECT_NO_THROW(
+        recvbuf1 = ipc1.recv();
+    );
+    EXPECT_NO_THROW(
+        recvbuf2 = ipc2.recv();
+    );
+    
+    size_t len1 = recvbuf1.getLength();
+    size_t len2 = recvbuf2.getLength();
+    recvbuf1.readData((void*)data3, len1);
+    recvbuf2.readData((void*)data4, len2);
 	
 	//check out length.
-	ASSERT_EQ(recvmsg.getLength(), sendmsg.getLength());
-	for(int i = 0;i < 6;i++){
-		uint8_t num = recvmsg.readUint8();
-		EXPECT_EQ(num, data[i]);
+	ASSERT_EQ(LEN2, len1);
+	ASSERT_EQ(LEN1, len2);
+	
+	for (int i = 0; i < len1; i++) {
+		EXPECT_EQ(data2[i], data3[i]);
 	}
+	for (int i = 0; i < len2; i++) {
+		EXPECT_EQ(data1[i], data4[i]);
+	}
+
 }
 
 }
