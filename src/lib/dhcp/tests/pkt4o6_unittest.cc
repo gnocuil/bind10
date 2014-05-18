@@ -151,15 +151,15 @@ TEST_F(Pkt4o6Test, constructor) {
         EXPECT_EQ(i+2,data[i]);
 }
 
-//test setJson and getJson 
+//test setJsonAttribute and getJsonAttribute 
 TEST_F(Pkt4o6Test, jsontest) {
 
     Pkt4o6Ptr pkt4o6 = CreatePkt4o6_case1();
 	
 	//store pkt4o6 josn info.
-    std::string json = pkt4o6->getJson();
+    std::string json = pkt4o6->getJsonAttribute();
     Pkt4o6Ptr pkt4o6_ = CreatePkt4o6_case2();
-    pkt4o6_->setJson(json);
+    pkt4o6_->setJsonAttribute(json);
     int RemotePort = 546; 
     std::string RemoteAddr("fe80::21e:8cff:fe9b:7349");
     int LocalPort = 0;

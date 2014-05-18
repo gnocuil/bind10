@@ -67,7 +67,7 @@ Pkt4o6::setPkt4LocalAddr() {
 }
 
 std::string
-Pkt4o6::getJson() {
+Pkt4o6::getJsonAttribute() {
     using boost::property_tree::ptree;
     ptree pt;
     pt.put("RemoteAddr", pkt6_->getRemoteAddr().toText());
@@ -82,7 +82,7 @@ Pkt4o6::getJson() {
 }
 
 void
-Pkt4o6::setJson(std::string json) {
+Pkt4o6::setJsonAttribute(std::string json) {
     using boost::property_tree::ptree;
     std::istringstream sin(json);
     ptree pt;

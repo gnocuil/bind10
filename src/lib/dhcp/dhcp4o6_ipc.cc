@@ -41,9 +41,10 @@ DHCP4o6IPC::sendPkt4o6(const Pkt4o6Ptr& pkt4o6) {
     len = buf6.getLength();
     buf.writeData(&len, sizeof(size_t));
     buf.writeData(buf6.getData(), len);
-    len = pkt4o6->getJson().size();
+    std::string att = pkt4o6->getJsonAttribute();
+    len = att.size();
     buf.writeData(&len, sizeof(size_t));
-    buf.writeData(pkt4o6->getJson().c_str(), len);
+    buf.writeData(att.c_str(), len);
     
     BaseIPC::send(buf);
 }
@@ -63,7 +64,7 @@ DHCP4o6IPC::recvPkt4o6() {
     buf.readData(buf_json, len_json);
     
     Pkt4o6Ptr p(new Pkt4o6(buf4, len4, buf6, len6));
-    p->setJson(buf_json);
+    p->setJsonAttribute(buf_json);
     queue_.push(p);
 }
 

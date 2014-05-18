@@ -2377,7 +2377,6 @@ Dhcpv6Srv::processDHCPv4Query(const Pkt6Ptr& query) {//4o6
     Pkt6Ptr reply;
     if (ipc_->isCurrent(query)) {
         reply = Pkt6Ptr(new Pkt6(DHCPV4_RESPONSE, query->getTransid()));
-
         
         appendRequestedOptions(query, reply);//TODO: should we remove this?
         

@@ -83,10 +83,10 @@ public:
     /// so we transmit them using json format string
     ///
     /// @return a json format string
-    std::string getJson();
+    std::string getJsonAttribute();
     
     /// @brief set Packet attributes according to a json format string
-    void setJson(std::string json);
+    void setJsonAttribute(std::string json);
     
     /// @brief get a DHCPv4MsgOption that contains pkt4_
     ///

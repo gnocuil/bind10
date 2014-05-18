@@ -86,7 +86,7 @@ TEST_F(DHCP4o6_IPC, v4send_v6receive) {
     //create Pkt4o6
 	Pkt4o6Ptr pkt4o6 = CreatePkt4o6_case1();
 
-    std::string json = pkt4o6->getJson();
+    std::string json = pkt4o6->getJsonAttribute();
     DHCP4IPC ipc4;
     DHCP6IPC ipc6;
     ipc4.open();
@@ -107,7 +107,7 @@ TEST_F(DHCP4o6_IPC, v4send_v6receive) {
     Pkt4o6Ptr recvmsg2 = ipc4.pop();
     ipc4.closeSocket();
     ipc6.closeSocket();
-    ASSERT_EQ(json, recvmsg1->getJson());//josn must be equal
+    ASSERT_EQ(json, recvmsg1->getJsonAttribute());//josn must be equal
     const OutputBuffer &buf4_1(recvmsg1->getPkt4()->getBuffer());
     size_t len = buf4_1.getLength();
     ASSERT_EQ(dataLength,len);//length of data in pkt4 must be equal
@@ -124,7 +124,7 @@ TEST_F(DHCP4o6_IPC, v4send_v6receive) {
 	    EXPECT_EQ(pkt6data1[i],testData[i]);
     }
     
-    ASSERT_EQ(json, recvmsg2->getJson());//josn must be equal
+    ASSERT_EQ(json, recvmsg2->getJsonAttribute());//josn must be equal
     const OutputBuffer &buf4_2(recvmsg2->getPkt4()->getBuffer());
     len = buf4_2.getLength();
     ASSERT_EQ(dataLength,len);//length of data in pkt4 must be equal
