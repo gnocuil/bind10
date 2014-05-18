@@ -35,6 +35,11 @@ Pkt4o6::Pkt4o6(const uint8_t* data4, size_t len4,
 }
 
 Pkt4o6::Pkt4o6(const Pkt6Ptr& pkt6) {
+    if (pkt6->getType() != DHCPV4_QUERY && 
+        pkt6->getType() != DHCPV4_RESPONSE) {
+        isc_throw(Pkt4o6ConstructError,
+                  "The DHCPv6 packet is not DHCPV4_QUERY or DHCPV4_RESPONSE");
+    }
     OptionPtr opt = pkt6->getOption(OPTION_DHCPV4_MSG);
     if (opt) {
         const OptionBuffer& data = opt->getData();

@@ -57,7 +57,8 @@ public:
     ///
     /// will construct Pkt4 according to pkt6's DHCPv4 Message Option
     /// 
-    /// @throw Pkt4o6ConstructError if DHCPv4 Message Option not found
+    /// @throw Pkt4o6ConstructError if given mssage is not DHCPV4_QUERY or 
+    /// DHCPV4_RESPONSE, or if OPTION_DHCPV4_MSG not found
     ///
     /// @param pkt6 A DHCPv6 DHCPV4_QUERY message
     Pkt4o6(const Pkt6Ptr& pkt6);               
