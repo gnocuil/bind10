@@ -2378,8 +2378,9 @@ Dhcpv6Srv::processDHCPv4Query(const Pkt6Ptr& query) {//4o6
     if (ipc_->isCurrent(query)) {
         reply = Pkt6Ptr(new Pkt6(DHCPV4_RESPONSE, query->getTransid()));
 
-        //TODO: should we remove this?
-        appendRequestedOptions(query, reply);
+        
+        appendRequestedOptions(query, reply);//TODO: should we remove this?
+        
         OptionPtr option(new Option(Option::V6,
                                     OPTION_DHCPV4_MSG,
                                     ipc_->current()->getDHCPv4MsgOption()));
