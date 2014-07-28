@@ -42,82 +42,82 @@ public:
     /// @brief Destructor.
     virtual ~DHCP4o6IPC() { instance_ = NULL; }
     
-    /// @brief create and initialize sockets to corresponding addresses
+    /// @brief Create and initialize sockets to corresponding addresses
     ///
-    /// this function calls methods in BaseIPC for socket processing
+    /// This function calls methods in BaseIPC for socket processing
     /// Method will throw if BaseIPC methods failed
     void open();
     
-    /// @brief send a DHCPv4 ove DHCPv6 packet
+    /// @brief Send a DHCPv4 ove DHCPv6 packet
     ///
-    /// this function converts Pkt4o6 into binary data and sends it
+    /// This function converts Pkt4o6 into binary data and sends it
     /// through BaseIPC send() 
     /// Method will throw if BaseIPC send() failed
     ///
     /// @param pkt4o6 Pointer of the packet to be sent
     void sendPkt4o6(const Pkt4o6Ptr& pkt4o6);
     
-    /// @brief receive a DHCPv4 ove DHCPv6 packet
+    /// @brief Receive a DHCPv4 ove DHCPv6 packet
     ///
-    /// this function calls BaseIPC recv() to receive binary data
+    /// This function calls BaseIPC recv() to receive binary data
     /// and converts it into Pkt4o6
     /// Received Pkt4o6 will be push into a queue and not returned
     /// Method will throw if BaseIPC recv() failed or Pkt4o6
     /// construction failed
     void recvPkt4o6();
     
-    /// @brief callback function for IfaceMgr
+    /// @brief Callback function for IfaceMgr
     ///
     /// This function is called when IfaceMgr select() has data from
     /// DHCP4o6IPC socket. It calls recvPkt4o6() to receive data.
     static void callback();
     
-    /// @brief test if receive queue is empty
+    /// @brief Test if receive queue is empty
     /// 
     /// @return true if queue is empty
     bool empty() const { return queue_.empty(); }
     
-    /// @brief retrive and remove a Pkt4o6 in the receive queue
+    /// @brief Retrive and remove a Pkt4o6 in the receive queue
     ///
     /// @return if not empty, Pkt4o6 in the head of the queue; otherwise
     /// return a null pointer
     Pkt4o6Ptr pop();
     
-    /// @brief check if a given pkt4 is the current processing pkt4o6
+    /// @brief Check if a given pkt4 is the current processing pkt4o6
     bool isCurrent(Pkt4Ptr pkt4) {
-        return current_ && pkt4 == current_->getPkt4();
+        return (current_ && pkt4 == current_->getPkt4());
     }
     
-    /// @brief check if a given pkt6 is the current processing pkt4o6
+    /// @brief Check if a given pkt6 is the current processing pkt4o6
     bool isCurrent(Pkt6Ptr pkt6) {
-        return current_ && pkt6 == current_->getPkt6();
+        return (current_ && pkt6 == current_->getPkt6());
     }
     
-    /// @brief get current DHCP4o6IPC instance
+    /// @brief Get current DHCP4o6IPC instance
     Pkt4o6Ptr current() { return current_; }
     
-    /// @brief enable DHCP4o6 function
+    /// @brief Enable DHCP4o6 function
     ///
     /// will add external socket into IfaceMgr
     static void enable();
     
-    /// @brief enable DHCP4o6 function
+    /// @brief Enable DHCP4o6 function
     ///
     /// will remove external socket from IfaceMgr
     static void disable();
 protected:
 
-    /// @brief a (local) filename to listen to
+    /// @brief A (local) filename to listen to
     ///
     /// @return a string of filename
     virtual std::string getLocalFilename() const = 0;
     
-    /// @brief a (remote) filename to send packets to
+    /// @brief A (remote) filename to send packets to
     ///
     /// @return a string of filename
     virtual std::string getRemoteFilename() const = 0;
     
-    /// @brief a queue of received DHCPv4 over DHCPv6 packets that has
+    /// @brief A queue of received DHCPv4 over DHCPv6 packets that has
     /// not been processed
     std::queue<Pkt4o6Ptr> queue_;
     
@@ -125,8 +125,8 @@ protected:
     ///
     /// This is required by callback function of iface_mgr
     static DHCP4o6IPC* instance_;
-    
-    /// @brief the current processing DHCPv4 over DHCPv6 packet
+  
+    /// @brief The current processing DHCPv4 over DHCPv6 packet
     Pkt4o6Ptr current_;
 };//DHCP4o6IPC class
 
