@@ -26,6 +26,7 @@
 #include <dhcpsrv/subnet.h>
 #include <dhcpsrv/alloc_engine.h>
 #include <hooks/callout_handle.h>
+#include <dhcp/dhcp4o6_ipc.h> //4o6
 
 #include <boost/noncopyable.hpp>
 
@@ -709,6 +710,9 @@ private:
     int hook_index_pkt4_receive_;
     int hook_index_subnet4_select_;
     int hook_index_pkt4_send_;
+    
+    /// IPC used for communation with dhcp4_srv
+    DHCP4o6IPCPtr ipc_;
 };
 
 }; // namespace isc::dhcp

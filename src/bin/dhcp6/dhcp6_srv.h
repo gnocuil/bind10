@@ -27,6 +27,7 @@
 #include <dhcpsrv/d2_client_mgr.h>
 #include <dhcpsrv/subnet.h>
 #include <hooks/callout_handle.h>
+#include <dhcp/dhcp4o6_ipc.h> //4o6
 
 #include <boost/noncopyable.hpp>
 
@@ -245,7 +246,16 @@ protected:
     ///
     /// @param infRequest message received from client
     Pkt6Ptr processInfRequest(const Pkt6Ptr& infRequest);
-
+    
+    /// @brief Stub function that will handle incoming DHCPv4-QUERY messages.
+    ///
+    /// 4o6: Process incoming DHCPv4-QUERY messages (DHCPv4 over DHCPv6).
+    /// Payload DHCPv4 message will be sent to DHCPv4 server, and
+    /// no response generated directly
+    ///
+    /// @param DHCPv4-QUERY message received from client
+    Pkt6Ptr processDHCPv4Query(const Pkt6Ptr& query);
+    
     /// @brief Creates status-code option.
     ///
     /// @param code status code value (see RFC3315)
@@ -670,6 +680,9 @@ private:
 
     /// UDP port number on which server listens.
     uint16_t port_;
+    
+    /// IPC used for communation with dhcp4_srv
+    DHCP4o6IPCPtr ipc_;
 
 protected:
 

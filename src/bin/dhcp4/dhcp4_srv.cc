@@ -129,6 +129,15 @@ Dhcpv4Srv::Dhcpv4Srv(uint16_t port, const char* dbconfig, const bool use_bcast,
 
         /// @todo call loadLibraries() when handling configuration changes
 
+        /// init DHCP4o6 IPC
+        try{
+            ipc_ = boost::shared_ptr<DHCP4o6IPC>(new DHCP4IPC());
+            ipc_->open();
+        } catch (const Exception &e) {
+            LOG_ERROR(dhcp4_logger, DHCP4_IPC_CONSTRUCT_ERROR).arg(e.what());
+            ipc_ = boost::shared_ptr<DHCP4o6IPC>();
+        }
+        
     } catch (const std::exception &e) {
         LOG_ERROR(dhcp4_logger, DHCP4_SRV_CONSTRUCT_ERROR).arg(e.what());
         shutdown_ = true;
@@ -173,6 +182,18 @@ Dhcpv4Srv::run() {
             query = receivePacket(timeout);
         } catch (const std::exception& e) {
             LOG_ERROR(dhcp4_logger, DHCP4_PACKET_RECEIVE_FAIL).arg(e.what());
+        }
+
+        // 4o6
+        if (ipc_ && !ipc_->empty()) {
+            query = ipc_->pop()->getPkt4();
+
+            //set Pkt4's localAddr according to U flag in Pkt6's transid field
+            ipc_->current()->setPkt4LocalAddr();
+            
+            if (!CfgMgr::instance().dhcp4o6Enabled()) {
+                query = Pkt4Ptr();
+            }
         }
 
         // Timeout may be reached or signal received, which breaks select()
@@ -419,7 +440,12 @@ Dhcpv4Srv::run() {
                       DHCP4_RESPONSE_DATA)
                 .arg(static_cast<int>(rsp->getType())).arg(rsp->toText());
 
-            sendPacket(rsp);
+            if (ipc_ && CfgMgr::instance().dhcp4o6Enabled() && ipc_->isCurrent(query)) {//4o6
+                Pkt4o6Ptr rsp4o6(new Pkt4o6(ipc_->current(), rsp));
+                ipc_->sendPkt4o6(rsp4o6);
+            } else {
+                sendPacket(rsp);
+            }
         } catch (const std::exception& e) {
             LOG_ERROR(dhcp4_logger, DHCP4_PACKET_SEND_FAIL)
                 .arg(e.what());
@@ -1426,7 +1452,12 @@ Dhcpv4Srv::selectSubnet(const Pkt4Ptr& question) const {
         subnet = CfgMgr::instance().getSubnet4(question->getGiaddr(),
                                                question->classes_,
                                                true);
-
+/*
+    // DHCP4o6: use incoming IPv6 interface of the packet to select a subnet
+    } else if (ipc_ && CfgMgr::instance().dhcp4o6Enabled() && ipc_->isCurrent(question)) {
+        subnet = CfgMgr::instance().getSubnet4(
+            ipc_->current()->getPkt6()->getIface(), question->classes_);
+*/
     // The message is not relayed so it is sent directly by a client. But
     // the client may be renewing its lease and in such case it unicasts
     // its message to the server. Note that the unicast Request bypasses
