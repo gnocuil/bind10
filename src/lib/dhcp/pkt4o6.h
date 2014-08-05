@@ -32,8 +32,12 @@ public:
 };
 
 class Pkt4o6;
-typedef boost::shared_ptr<Pkt4o6> Pkt4o6Ptr;
+typedef boost::shared_ptr<Pkt4o6> Pkt4o6Ptr;//Pointer of Pkt4o6
 
+/// @brief DHCPv4 over DHCPv6 packet
+/// It represents DHCPv4o6 packet by including a Pkt4ptr and a Pkt6ptr 
+/// member variables. Generally the Pkt4ptr points to its DHCPv4 message
+/// content, and Pkt6ptr gives DHCPv6 information.
 class Pkt4o6{
 public:
     /// @brief Constructor, used in DHCP4o6IPC to construct Pkt4o6 from

@@ -247,11 +247,13 @@ protected:
     /// @param infRequest message received from client
     Pkt6Ptr processInfRequest(const Pkt6Ptr& infRequest);
     
-    /// @brief Stub function that will handle incoming DHCPv4-QUERY messages.
+    /// @brief Processing incoming DHCPv4-QUERY messages.
     ///
-    /// 4o6: Process incoming DHCPv4-QUERY messages (DHCPv4 over DHCPv6).
-    /// Payload DHCPv4 message will be sent to DHCPv4 server, and
-    /// no response generated directly
+    /// Processes incoming DHCPv4-QUERY messages (DHCPv4 over DHCPv6)
+    /// from clients, and also DHCPv4 response from dhcp4_srv.
+    /// Payload DHCPv4 message from clients will be sent to dhcp4_srv, and
+    /// DHCPv4 response from dhcp4_srv will result DHCPv4-RESPONSE packet and
+    /// send back to clients.
     ///
     /// @param DHCPv4-QUERY message received from client
     Pkt6Ptr processDHCPv4Query(const Pkt6Ptr& query);

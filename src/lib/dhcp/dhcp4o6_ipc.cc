@@ -30,7 +30,7 @@ DHCP4o6IPC::open() {
 void
 DHCP4o6IPC::sendPkt4o6(const Pkt4o6Ptr& pkt4o6) {
     if (!pkt4o6) {
-        isc_throw(DHCP4o6IPCSendError, "NULL Packet");
+        isc_throw(DHCP4o6IPCSendError, "NULL 4o6 Packet");
     }
     isc::util::OutputBuffer buf(0);
     const isc::util::OutputBuffer &buf4(pkt4o6->getPkt4()->getBuffer());
