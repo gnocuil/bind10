@@ -81,6 +81,9 @@
 #define STATUS_NotConfigured     9
 #define STATUS_NotAllowed       10
 
+/* DHCPv4 Message Option, from RFC-ietf-dhc-dhcpv4-over-dhcpv6 */
+#define OPTION_DHCPV4_MSG         87 
+
 /*
  * DHCPv6 message types, defined in section 5.3 of RFC 3315
  */
@@ -99,6 +102,13 @@
 #define DHCPV6_RELAY_REPL          13
 #define DHCPV6_LEASEQUERY          14
 #define DHCPV6_LEASEQUERY_REPLY    15
+
+/*
+ * DHCPv4-query and DHCPv4-response message types,
+ * defined in RFC-ietf-dhc-dhcpv4-over-dhcpv6
+ */
+#define DHCPV4_QUERY              20
+#define DHCPV4_RESPONSE           21
 
 extern const char *dhcpv6_type_names[];
 extern const int dhcpv6_type_name_max;

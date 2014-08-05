@@ -18,11 +18,7 @@
 #include <dhcp/pkt6.h>
 #include <dhcp/pkt4.h>
 #include <dhcp/option.h>
-
-//Use private numbers now, waiting for IANA to assign codes and move to dhcp6.h
-#define OPTION_DHCPV4_MSG         54321 /* 4o6: DHCPv4 Message Option */
-#define DHCPV4_QUERY              245 /* 4o6: DHCPv4-qurey message */
-#define DHCPV4_RESPONSE           246 /* 4o6: DHCPv4-response message*/
+#include <dhcp/dhcp6.h>
 
 namespace isc {
 
