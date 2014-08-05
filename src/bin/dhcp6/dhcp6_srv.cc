@@ -2393,11 +2393,11 @@ Dhcpv6Srv::enable4o6() {
     puts("dhcp6 enable 4o6!!!");
     /// init DHCP4o6 IPC
     try {
-        ipc_ = boost::shared_ptr<DHCP4o6IPC>(new DHCP6IPC());
-        ipc_->open();
+        ipc_ = DHCP4o6IPCPtr(new DHCP4o6IPC("DHCPv4_over_DHCPv6_v4tov6",
+                                            "DHCPv4_over_DHCPv6_v6tov4"));
     } catch (const Exception &e) {
         LOG_ERROR(dhcp6_logger, DHCP6_IPC_CONSTRUCT_ERROR).arg(e.what());
-        ipc_ = boost::shared_ptr<DHCP4o6IPC>();
+        ipc_ = DHCP4o6IPCPtr();
     }
     if (!ipc_)
         return;

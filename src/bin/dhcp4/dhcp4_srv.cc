@@ -1927,11 +1927,11 @@ Dhcpv4Srv::enable4o6() {
     puts("dhcp4 enable 4o6!!!");
     /// init DHCP4o6 IPC
     try {
-        ipc_ = boost::shared_ptr<DHCP4o6IPC>(new DHCP4IPC());
-        ipc_->open();
+        ipc_ = DHCP4o6IPCPtr(new DHCP4o6IPC("DHCPv4_over_DHCPv6_v6tov4",
+                                            "DHCPv4_over_DHCPv6_v4tov6"));
     } catch (const Exception &e) {
         LOG_ERROR(dhcp4_logger, DHCP4_IPC_CONSTRUCT_ERROR).arg(e.what());
-        ipc_ = boost::shared_ptr<DHCP4o6IPC>();
+        ipc_ = DHCP4o6IPCPtr();
     }
     if (!ipc_)
         return;

@@ -18,13 +18,9 @@
 namespace isc {
 namespace dhcp {
 
-DHCP4o6IPC* DHCP4o6IPC::instance_ = NULL;
-
-void
-DHCP4o6IPC::open() {
-    openSocket();
-    bindSocket(getLocalFilename());
-    setRemote(getRemoteFilename());
+DHCP4o6IPC::DHCP4o6IPC(const std::string& local_filename, const std::string& remote_filename) :
+    BaseIPC(local_filename, remote_filename) {
+    open();
 }
 
 void

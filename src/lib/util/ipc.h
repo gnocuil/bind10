@@ -65,69 +65,41 @@ public:
     /// @brief BaseIPC constructor.
     ///
     /// Creates BaseIPC object that represents UNIX communication.
-    BaseIPC() :
+    BaseIPC(const std::string& local_filename, const std::string& remote_filename) :
         socketfd_(-1),
         remote_addr_len_(0),
-        local_addr_len_(0)
+        local_filename_(local_filename),
+        remote_filename_(remote_filename)
     {
     }
 
     /// @brief BaseIPC destructor.
     ///
     /// Delete a BaseIPC object.
-    ~BaseIPC() { closeSocket(); }
+    virtual ~BaseIPC() { closeIPC(); }
     
     
-    /// @brief Create UNIX socket
+    /// @brief Open UNIX socket
     ///
     /// Method will throw if socket creation fails.
     ///
     /// @return socket descriptor
-    int openSocket() {
+    int open() {
         //create socket
         int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
         if (fd < 0) {
             isc_throw(IPCSocketError, "BaseIPC failed to creat a socket");
     	}
-
-        return socketfd_ = fd;
-    }
-
-    /// @brief bind UNIX socket to the given filename
-    ///
-    /// @param local_name local filename, will bind to this address
-    ///
-    /// Method will throw if socket binding fails.
-    void bindSocket(const std::string& local_name) {
-        if (socketfd_ < 0)
-            openSocket();
-        //init address
-        memset(&local_addr_, 0, sizeof(struct sockaddr_un));
-        local_addr_.sun_family = AF_UNIX;
-        strcpy(&local_addr_.sun_path[1], local_name.c_str());
-        local_addr_len_ = sizeof(sa_family_t) + local_name.size() + 1;
-
-        //bind to local_address
-        if (bind(socketfd_, (struct sockaddr *)&local_addr_, local_addr_len_) < 0) {
-            isc_throw(IPCBindError, "failed to bind to local address: " + local_name);
-    	}
-    }
-
-    /// @brief set remote filename
-    ///
-    /// @param remote_name Remote filename
-    void setRemote(const std::string& remote_name) {
-        if (socketfd_ < 0)
-            openSocket();
-        //init address
-        memset(&remote_addr_, 0, sizeof(struct sockaddr_un));
-        remote_addr_.sun_family = AF_UNIX;
-        strcpy(&remote_addr_.sun_path[1], remote_name.c_str());
-        remote_addr_len_ = sizeof(sa_family_t) + remote_name.size() + 1;
+    	socketfd_ = fd;
+    	
+        bindSocket();
+        setRemote();
+    	
+    	return socketfd_;
     }
 
     /// @brief Close opened socket.
-    void closeSocket() {
+    void closeIPC() {
         if(socketfd_ >= 0)
             close(socketfd_);
         socketfd_ = -1;
@@ -163,9 +135,6 @@ public:
     ///
     /// @return the data have been received.
     isc::util::InputBuffer recv() {
-        if (local_addr_len_ == 0) {
-            isc_throw(IPCRecvError, "Local address unset, call bindSocket() first");
-        }
         uint8_t buf[RCVBUFSIZE];
         int len = recvfrom(socketfd_, buf, RCVBUFSIZE, 0, NULL, NULL);
         if (len < 0) {
@@ -182,7 +151,35 @@ public:
     int getSocket() { return socketfd_; }
 
 protected:
-	
+
+    /// @brief set remote filename
+    void setRemote() {
+        //init address
+        memset(&remote_addr_, 0, sizeof(struct sockaddr_un));
+        remote_addr_.sun_family = AF_UNIX;
+        strcpy(&remote_addr_.sun_path[1], remote_filename_.c_str());
+        remote_addr_len_ = sizeof(sa_family_t) + remote_filename_.size() + 1;
+    }
+    
+    /// @brief bind UNIX socket to the given filename
+    ///
+    /// Method will throw if socket binding fails.
+    void bindSocket() {
+        struct sockaddr_un local_addr_;
+        int local_addr_len_;
+            
+        //init address
+        memset(&local_addr_, 0, sizeof(struct sockaddr_un));
+        local_addr_.sun_family = AF_UNIX;
+        strcpy(&local_addr_.sun_path[1], local_filename_.c_str());
+        local_addr_len_ = sizeof(sa_family_t) + local_filename_.size() + 1;
+
+        //bind to local_address
+        if (bind(socketfd_, (struct sockaddr *)&local_addr_, local_addr_len_) < 0) {
+            isc_throw(IPCBindError, "failed to bind to local address: " + local_filename_);
+    	}
+    }
+    
     /// UNIX socket value.
     int socketfd_;
     
@@ -192,11 +189,9 @@ protected:
     ///length of remote_addr_
     int remote_addr_len_;
 
-    ///local UNIX socket address
-    struct sockaddr_un local_addr_;
-    
-    ///length of local_addr_
-    int local_addr_len_;
+    /// filename for receiving and sending socket
+    std::string local_filename_, remote_filename_;
+
 }; // BaseIPC class
 
 } // namespace util

@@ -35,18 +35,12 @@ class DHCP4o6IPC : public isc::util::BaseIPC {
 public:
     /// @brief Default constructor.
     ///
-    /// DHCP4o6IPC is expected to create only one instance in a process,
-    /// and will set itself to intances_ in constructor
-    DHCP4o6IPC() { instance_ = this; }
-    
-    /// @brief Destructor.
-    virtual ~DHCP4o6IPC() { instance_ = NULL; }
-    
-    /// @brief Create and initialize sockets to corresponding addresses
-    ///
     /// This function calls methods in BaseIPC for socket processing
     /// Method will throw if BaseIPC methods failed
-    void open();
+    ///
+    /// @param local_filename Filename for receiving socket
+    /// @param remote_filename Filename for sending socket
+    DHCP4o6IPC(const std::string& local_filename, const std::string& remote_filename);
     
     /// @brief Send a DHCPv4 ove DHCPv6 packet
     ///
@@ -91,16 +85,6 @@ public:
     Pkt4o6Ptr current() { return current_; }
 
 protected:
-
-    /// @brief A (local) filename to listen to
-    ///
-    /// @return a string of filename
-    virtual std::string getLocalFilename() const = 0;
-    
-    /// @brief A (remote) filename to send packets to
-    ///
-    /// @return a string of filename
-    virtual std::string getRemoteFilename() const = 0;
     
     /// @brief A queue of received DHCPv4 over DHCPv6 packets that has
     /// not been processed
@@ -109,31 +93,17 @@ protected:
     /// @brief Static pointer to the sole instance of the DHCP4o6 IPC.
     ///
     /// This is required by callback function of iface_mgr
-    static DHCP4o6IPC* instance_;
+//    static DHCP4o6IPC* instance_;
   
     /// @brief The current processing DHCPv4 over DHCPv6 packet
     Pkt4o6Ptr current_;
 };//DHCP4o6IPC class
 
-// A filename used for DHCPv4 server --> DHCPv6 server
+// The filename used for DHCPv4 server --> DHCPv6 server
 #define FILENAME_4TO6 "DHCPv4_over_DHCPv6_v4tov6"
 
-// A filename used for DHCPv4 server <-- DHCPv6 server
+// The filename used for DHCPv4 server <-- DHCPv6 server
 #define FILENAME_6TO4 "DHCPv4_over_DHCPv6_v6tov4"
-
-/// @brief IPC class actually used in DHCPv4 server
-class DHCP4IPC : public DHCP4o6IPC {
-protected:
-    virtual std::string getLocalFilename() const { return FILENAME_6TO4; }
-    virtual std::string getRemoteFilename() const { return FILENAME_4TO6; }
-};
-
-/// @brief IPC class actually used in DHCPv6 server
-class DHCP6IPC : public DHCP4o6IPC {
-protected:
-    virtual std::string getLocalFilename() const { return FILENAME_4TO6; }
-    virtual std::string getRemoteFilename() const { return FILENAME_6TO4; }
-};
 
 typedef boost::shared_ptr<DHCP4o6IPC> DHCP4o6IPCPtr;
 
