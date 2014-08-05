@@ -68,13 +68,6 @@ DHCP4o6IPC::recvPkt4o6() {
     queue_.push(p);
 }
 
-void
-DHCP4o6IPC::callback() {
-    if (instance_) {
-        instance_->recvPkt4o6();
-    }
-}
-
 Pkt4o6Ptr
 DHCP4o6IPC::pop() {
     if (queue_.empty())
@@ -82,21 +75,6 @@ DHCP4o6IPC::pop() {
     current_ = queue_.front();
     queue_.pop();
     return current_;
-}
-
-void
-DHCP4o6IPC::enable() {
-    if (instance_) {
-        IfaceMgr::instance().addExternalSocket(instance_->getSocket(),
-                                               instance_->callback);
-    }
-}
-
-void
-DHCP4o6IPC::disable() {
-    if (instance_) {
-        IfaceMgr::instance().deleteExternalSocket(instance_->getSocket());
-    }
 }
 
 } // isc::dhcp namespace

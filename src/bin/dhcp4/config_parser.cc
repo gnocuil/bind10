@@ -23,6 +23,7 @@
 #include <dhcpsrv/option_space_container.h>
 #include <util/encode/hex.h>
 #include <util/strutil.h>
+#include <dhcp4/dhcp4_srv.h>
 
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
@@ -470,7 +471,7 @@ void commitGlobalOptions() {
 }
 
 isc::data::ConstElementPtr
-configureDhcp4Server(Dhcpv4Srv&, isc::data::ConstElementPtr config_set) {
+configureDhcp4Server(Dhcpv4Srv& srv, isc::data::ConstElementPtr config_set) {
     if (!config_set) {
         ConstElementPtr answer = isc::config::createAnswer(1,
                                  string("Can't parse NULL config"));
@@ -558,9 +559,9 @@ configureDhcp4Server(Dhcpv4Srv&, isc::data::ConstElementPtr config_set) {
                 if (config_pair.first == "4o6-enable") {
                     try {
                         if (config_pair.second->boolValue()) {
-                            CfgMgr::instance().enableDhcp4o6();
+                            srv.enable4o6();
                         } else {
-                            CfgMgr::instance().disableDhcp4o6();
+                            srv.disable4o6();
                         }
                     } catch (const isc::Exception& e) {
                         //TODO: do someting

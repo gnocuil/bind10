@@ -162,15 +162,6 @@ Dhcpv6Srv::Dhcpv6Srv(uint16_t port)
 
         /// @todo call loadLibraries() when handling configuration changes
         
-        
-        /// init DHCP4o6 IPC
-        try {
-            ipc_ = boost::shared_ptr<DHCP4o6IPC>(new DHCP6IPC());
-            ipc_->open();
-        } catch (const Exception &e) {
-            LOG_ERROR(dhcp6_logger, DHCP6_IPC_CONSTRUCT_ERROR).arg(e.what());
-            ipc_ = boost::shared_ptr<DHCP4o6IPC>();
-        }
     } catch (const std::exception &e) {
         LOG_ERROR(dhcp6_logger, DHCP6_SRV_CONSTRUCT_ERROR).arg(e.what());
         return;
@@ -268,9 +259,6 @@ bool Dhcpv6Srv::run() {
         // 4o6
         if (ipc_ && !ipc_->empty()) {
             query = ipc_->pop()->getPkt6();
-            if (!CfgMgr::instance().dhcp4o6Enabled()) {
-                query = Pkt6Ptr();
-            }
         }
 
         // Timeout may be reached or signal received, which breaks select()
@@ -2372,7 +2360,7 @@ Dhcpv6Srv::processInfRequest(const Pkt6Ptr& infRequest) {
 
 Pkt6Ptr
 Dhcpv6Srv::processDHCPv4Query(const Pkt6Ptr& query) {//4o6
-    if (!ipc_ || !CfgMgr::instance().dhcp4o6Enabled())
+    if (!ipc_)
         return Pkt6Ptr();
     Pkt6Ptr reply;
     if (ipc_->isCurrent(query)) {
@@ -2398,6 +2386,32 @@ Dhcpv6Srv::processDHCPv4Query(const Pkt6Ptr& query) {//4o6
         }
     }
     return reply;
+}
+
+void
+Dhcpv6Srv::enable4o6() {
+    puts("dhcp6 enable 4o6!!!");
+    /// init DHCP4o6 IPC
+    try {
+        ipc_ = boost::shared_ptr<DHCP4o6IPC>(new DHCP6IPC());
+        ipc_->open();
+    } catch (const Exception &e) {
+        LOG_ERROR(dhcp6_logger, DHCP6_IPC_CONSTRUCT_ERROR).arg(e.what());
+        ipc_ = boost::shared_ptr<DHCP4o6IPC>();
+    }
+    if (!ipc_)
+        return;
+    IfaceMgr::instance().addExternalSocket(ipc_->getSocket(),
+                                boost::bind(&DHCP4o6IPC::recvPkt4o6, ipc_));
+}
+
+void
+Dhcpv6Srv::disable4o6() {
+    puts("dhcp6 disable 4o6!!!");
+    if (!ipc_)
+        return;
+    IfaceMgr::instance().deleteExternalSocket(ipc_->getSocket());
+    ipc_ = boost::shared_ptr<DHCP4o6IPC>();
 }
 
 void

@@ -192,6 +192,17 @@ public:
     virtual void d2ClientErrorHandler(const dhcp_ddns::
                                       NameChangeSender::Result result,
                                       dhcp_ddns::NameChangeRequestPtr& ncr);
+                                      
+    /// @brief Enable DHCPv4 over DHCPv6 function
+    ///
+    /// This method enables 4o6 function in dhcpv4 server
+    void enable4o6();
+    
+    /// @brief Disable DHCPv4 over DHCPv6 function
+    ///
+    /// This method disables 4o6 function in dhcpv4 server
+    void disable4o6();
+    
 protected:
 
     /// @name Functions filtering and sanity-checking received messages.

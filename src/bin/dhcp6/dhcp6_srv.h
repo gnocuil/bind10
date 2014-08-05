@@ -152,6 +152,16 @@ public:
                                       NameChangeSender::Result result,
                                       dhcp_ddns::NameChangeRequestPtr& ncr);
 
+    /// @brief Enable DHCPv4 over DHCPv6 function
+    ///
+    /// This method enables 4o6 function in dhcpv6 server
+    void enable4o6();
+    
+    /// @brief Disable DHCPv4 over DHCPv6 function
+    ///
+    /// This method disables 4o6 function in dhcpv6 server
+    void disable4o6();
+
 protected:
 
     /// @brief Compare received server id with our server id

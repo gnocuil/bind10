@@ -129,15 +129,6 @@ Dhcpv4Srv::Dhcpv4Srv(uint16_t port, const char* dbconfig, const bool use_bcast,
 
         /// @todo call loadLibraries() when handling configuration changes
 
-        /// init DHCP4o6 IPC
-        try{
-            ipc_ = boost::shared_ptr<DHCP4o6IPC>(new DHCP4IPC());
-            ipc_->open();
-        } catch (const Exception &e) {
-            LOG_ERROR(dhcp4_logger, DHCP4_IPC_CONSTRUCT_ERROR).arg(e.what());
-            ipc_ = boost::shared_ptr<DHCP4o6IPC>();
-        }
-        
     } catch (const std::exception &e) {
         LOG_ERROR(dhcp4_logger, DHCP4_SRV_CONSTRUCT_ERROR).arg(e.what());
         shutdown_ = true;
@@ -191,9 +182,6 @@ Dhcpv4Srv::run() {
             //set Pkt4's localAddr according to U flag in Pkt6's transid field
             ipc_->current()->setPkt4LocalAddr();
             
-            if (!CfgMgr::instance().dhcp4o6Enabled()) {
-                query = Pkt4Ptr();
-            }
         }
 
         // Timeout may be reached or signal received, which breaks select()
@@ -440,7 +428,7 @@ Dhcpv4Srv::run() {
                       DHCP4_RESPONSE_DATA)
                 .arg(static_cast<int>(rsp->getType())).arg(rsp->toText());
 
-            if (ipc_ && CfgMgr::instance().dhcp4o6Enabled() && ipc_->isCurrent(query)) {//4o6
+            if (ipc_ && ipc_->isCurrent(query)) {//4o6
                 Pkt4o6Ptr rsp4o6(new Pkt4o6(ipc_->current(), rsp));
                 ipc_->sendPkt4o6(rsp4o6);
             } else {
@@ -1454,7 +1442,7 @@ Dhcpv4Srv::selectSubnet(const Pkt4Ptr& question) const {
                                                true);
 /*
     // DHCP4o6: use incoming IPv6 interface of the packet to select a subnet
-    } else if (ipc_ && CfgMgr::instance().dhcp4o6Enabled() && ipc_->isCurrent(question)) {
+    } else if (ipc_ && ipc_->isCurrent(question)) {
         subnet = CfgMgr::instance().getSubnet4(
             ipc_->current()->getPkt6()->getIface(), question->classes_);
 */
@@ -1932,6 +1920,32 @@ Dhcpv4Srv::d2ClientErrorHandler(const
     /// @todo We may wish to revisit this, but for now we will simpy turn
     /// them off.
     CfgMgr::instance().getD2ClientMgr().suspendUpdates();
+}
+
+void
+Dhcpv4Srv::enable4o6() {
+    puts("dhcp4 enable 4o6!!!");
+    /// init DHCP4o6 IPC
+    try {
+        ipc_ = boost::shared_ptr<DHCP4o6IPC>(new DHCP4IPC());
+        ipc_->open();
+    } catch (const Exception &e) {
+        LOG_ERROR(dhcp4_logger, DHCP4_IPC_CONSTRUCT_ERROR).arg(e.what());
+        ipc_ = boost::shared_ptr<DHCP4o6IPC>();
+    }
+    if (!ipc_)
+        return;
+    IfaceMgr::instance().addExternalSocket(ipc_->getSocket(),
+                                boost::bind(&DHCP4o6IPC::recvPkt4o6, ipc_));
+}
+
+void
+Dhcpv4Srv::disable4o6() {
+    puts("dhcp4 disable 4o6!!!");
+    if (!ipc_)
+        return;
+    IfaceMgr::instance().deleteExternalSocket(ipc_->getSocket());
+    ipc_ = boost::shared_ptr<DHCP4o6IPC>();
 }
 
 }   // namespace dhcp

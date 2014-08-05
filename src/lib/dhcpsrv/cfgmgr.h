@@ -419,17 +419,6 @@ public:
     ///
     /// @return a reference to the DHCP-DDNS manager.
     D2ClientMgr& getD2ClientMgr();
-    
-    ///@brief Convenience method for checking if DHCPv4 over DHCPv6 is enabled.
-    ///
-    /// @return True is DHCPv4 over DHCPv6 is enabled
-    bool dhcp4o6Enabled();
-    
-    ///@brief enable DHCPv4 over DHCPv6 function
-    void enableDhcp4o6();
-    
-    ///@brief disable DHCPv4 over DHCPv6 function
-    void disableDhcp4o6();
 
 protected:
 

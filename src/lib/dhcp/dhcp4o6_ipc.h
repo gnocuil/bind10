@@ -66,12 +66,6 @@ public:
     /// construction failed
     void recvPkt4o6();
     
-    /// @brief Callback function for IfaceMgr
-    ///
-    /// This function is called when IfaceMgr select() has data from
-    /// DHCP4o6IPC socket. It calls recvPkt4o6() to receive data.
-    static void callback();
-    
     /// @brief Test if receive queue is empty
     /// 
     /// @return true if queue is empty
@@ -95,16 +89,7 @@ public:
     
     /// @brief Get current DHCP4o6IPC instance
     Pkt4o6Ptr current() { return current_; }
-    
-    /// @brief Enable DHCP4o6 function
-    ///
-    /// will add external socket into IfaceMgr
-    static void enable();
-    
-    /// @brief Enable DHCP4o6 function
-    ///
-    /// will remove external socket from IfaceMgr
-    static void disable();
+
 protected:
 
     /// @brief A (local) filename to listen to
