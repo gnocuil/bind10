@@ -70,13 +70,13 @@ public:
     /// @param pkt4 a DHCPv4 response message
     Pkt4o6(const Pkt4o6Ptr& pkt4o6, const Pkt4Ptr& pkt4);
 
-    /// @brief get Pkt6 format of this DHCPv4 over DHCPv6 packet
+    /// @brief Get Pkt6 format of this DHCPv4 over DHCPv6 packet
     Pkt6Ptr getPkt6() const { return (pkt6_); }
     
-    /// @brief get Pkt4 content of this DHCPv4 over DHCPv6 packet
+    /// @brief Get Pkt4 content of this DHCPv4 over DHCPv6 packet
     Pkt4Ptr getPkt4() const { return (pkt4_); }
     
-    /// @brief json format of nessary information
+    /// @brief Json format of nessary information
     ///
     /// There are some nessary information that needs to be passed between
     /// DHCPv4 and DHCPv6 servers, such as IPv6 addresses, ports, iface, etc.
@@ -86,15 +86,15 @@ public:
     /// @return a json format string
     std::string getJsonAttribute();
     
-    /// @brief set Packet attributes according to a json format string
+    /// @brief Set Packet attributes according to a json format string
     void setJsonAttribute(std::string json);
     
-    /// @brief get a DHCPv4MsgOption that contains pkt4_
+    /// @brief Get a DHCPv4MsgOption that contains pkt4_
     ///
     /// @return a DHCPv4MsgOption
     OptionBuffer getDHCPv4MsgOption();
     
-    /// @brief set local address in pkt4_ according to U flag in pkt6_
+    /// @brief Set local address in pkt4_ according to U flag in pkt6_
     void setPkt4LocalAddr();
     
 protected:
