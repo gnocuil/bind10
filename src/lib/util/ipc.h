@@ -25,17 +25,10 @@
 namespace isc {
 namespace util {
 
-/// @brief Exception thrown when BaseIPC bindSocket() failed.
-class IPCBindError : public Exception {
+/// @brief Exception thrown when BaseIPC open() failed.
+class IPCOpenError : public Exception {
 public:
-    IPCBindError(const char* file, size_t line, const char* what) :
-    isc::Exception(file, line, what) { };
-};
-
-/// @brief Exception thrown when BaseIPC openSocket() failed.
-class IPCSocketError : public Exception {
-public:
-    IPCSocketError(const char* file, size_t line, const char* what) :
+    IPCOpenError(const char* file, size_t line, const char* what) :
     isc::Exception(file, line, what) { };
 };
 
@@ -88,12 +81,12 @@ public:
         //create socket
         int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
         if (fd < 0) {
-            isc_throw(IPCSocketError, "BaseIPC failed to creat a socket");
+            isc_throw(IPCOpenError, "Failed to create a socket");
     	}
     	socketfd_ = fd;
     	
         bindSocket();
-        setRemote();
+        setRemoteFilename();
     	
     	return socketfd_;
     }
@@ -109,14 +102,14 @@ public:
     /// 
     /// @param buf the date are prepared to send.
     ///
-    /// setRemote() MUST be called before calling this function
-    /// Method will throw if setRemote() has not been called
+    /// open() MUST be called before calling this function
+    /// Method will throw if open() has not been called
     /// or sendto() failed
     ///
     /// @return the number of data have been sent.
     int send(const isc::util::OutputBuffer &buf) { 
         if (remote_addr_len_ == 0) {
-            isc_throw(IPCSendError, "Remote address unset, call setRemote() first");
+            isc_throw(IPCSendError, "Remote address unset");
         }
         int count = sendto(socketfd_, buf.getData(), buf.getLength(), 0,
                            (struct sockaddr*)&remote_addr_, remote_addr_len_);
@@ -129,9 +122,8 @@ public:
 
     /// @brief receive message from a host that the same socket are binding.
     ///
-    /// bindSocket() MUST be called before calling this function
-    /// Method will throw if bindSocket() has not been called
-    /// or recvfrom() failed
+    /// open() MUST be called before calling this function
+    /// Method will throw if socket recvfrom() failed
     ///
     /// @return the data have been received.
     isc::util::InputBuffer recv() {
@@ -153,7 +145,7 @@ public:
 protected:
 
     /// @brief set remote filename
-    void setRemote() {
+    void setRemoteFilename() {
         //init address
         memset(&remote_addr_, 0, sizeof(struct sockaddr_un));
         remote_addr_.sun_family = AF_UNIX;
@@ -176,7 +168,7 @@ protected:
 
         //bind to local_address
         if (bind(socketfd_, (struct sockaddr *)&local_addr_, local_addr_len_) < 0) {
-            isc_throw(IPCBindError, "failed to bind to local address: " + local_filename_);
+            isc_throw(IPCOpenError, "failed to bind to local address: " + local_filename_);
     	}
     }
     
