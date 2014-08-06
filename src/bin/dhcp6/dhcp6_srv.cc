@@ -249,18 +249,20 @@ bool Dhcpv6Srv::run() {
         // client's message and server's response
         Pkt6Ptr query;
         Pkt6Ptr rsp;
+        
+        // 4o6
+        if (!query && ipc_ && !ipc_->empty()) {
+            query = ipc_->pop()->getPkt6();
+        }
 
         try {
-            query = receivePacket(timeout);
+            if (!query) {
+                query = receivePacket(timeout);
+            }
         } catch (const std::exception& e) {
             LOG_ERROR(dhcp6_logger, DHCP6_PACKET_RECEIVE_FAIL).arg(e.what());
         }
         
-        // 4o6
-        if (ipc_ && !ipc_->empty()) {
-            query = ipc_->pop()->getPkt6();
-        }
-
         // Timeout may be reached or signal received, which breaks select()
         // with no packet received
         if (!query) {

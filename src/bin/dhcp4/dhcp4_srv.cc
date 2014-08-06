@@ -169,19 +169,21 @@ Dhcpv4Srv::run() {
         Pkt4Ptr query;
         Pkt4Ptr rsp;
 
-        try {
-            query = receivePacket(timeout);
-        } catch (const std::exception& e) {
-            LOG_ERROR(dhcp4_logger, DHCP4_PACKET_RECEIVE_FAIL).arg(e.what());
-        }
-
         // 4o6
-        if (ipc_ && !ipc_->empty()) {
+        if (!query && ipc_ && !ipc_->empty()) {
             query = ipc_->pop()->getPkt4();
 
             //set Pkt4's localAddr according to U flag in Pkt6's transid field
             ipc_->current()->setPkt4LocalAddr();
             
+        }
+
+        try {
+            if (!query) {
+                query = receivePacket(timeout);
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR(dhcp4_logger, DHCP4_PACKET_RECEIVE_FAIL).arg(e.what());
         }
 
         // Timeout may be reached or signal received, which breaks select()
