@@ -516,9 +516,6 @@ private:
 
     /// @brief Manages the DHCP-DDNS client and its configuration.
     D2ClientMgr d2_client_mgr_;
-    
-    /// flag of whether DHCPv4 over DHCPv6 is enabled
-    bool dhcp4o6_enabled_;
 };
 
 } // namespace isc::dhcp
