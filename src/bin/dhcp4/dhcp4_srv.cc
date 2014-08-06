@@ -174,7 +174,7 @@ Dhcpv4Srv::run() {
             query = ipc_->pop()->getPkt4();
 
             //set Pkt4's localAddr according to U flag in Pkt6's transid field
-            ipc_->current()->setPkt4LocalAddr();
+            ipc_->currentPkt4o6()->setPkt4LocalAddr();
             
         }
 
@@ -430,9 +430,13 @@ Dhcpv4Srv::run() {
                       DHCP4_RESPONSE_DATA)
                 .arg(static_cast<int>(rsp->getType())).arg(rsp->toText());
 
-            if (ipc_ && ipc_->isCurrent(query)) {//4o6
-                Pkt4o6Ptr rsp4o6(new Pkt4o6(ipc_->current(), rsp));
-                ipc_->sendPkt4o6(rsp4o6);
+            if (ipc_ && ipc_->isDHCP4o6Request(query)) {//4o6
+                try {
+                    Pkt4o6Ptr rsp4o6(new Pkt4o6(ipc_->currentPkt4o6(), rsp));
+                    ipc_->sendPkt4o6(rsp4o6);
+                } catch (const Exception& ex) {
+                    LOG_ERROR(dhcp4_logger, DHCP4_IPC_SEND_ERROR).arg(ex.what());
+                }
             } else {
                 sendPacket(rsp);
             }
@@ -1442,12 +1446,7 @@ Dhcpv4Srv::selectSubnet(const Pkt4Ptr& question) const {
         subnet = CfgMgr::instance().getSubnet4(question->getGiaddr(),
                                                question->classes_,
                                                true);
-/*
-    // DHCP4o6: use incoming IPv6 interface of the packet to select a subnet
-    } else if (ipc_ && ipc_->isCurrent(question)) {
-        subnet = CfgMgr::instance().getSubnet4(
-            ipc_->current()->getPkt6()->getIface(), question->classes_);
-*/
+
     // The message is not relayed so it is sent directly by a client. But
     // the client may be renewing its lease and in such case it unicasts
     // its message to the server. Note that the unicast Request bypasses

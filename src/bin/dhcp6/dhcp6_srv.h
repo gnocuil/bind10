@@ -259,14 +259,21 @@ protected:
     
     /// @brief Processing incoming DHCPv4-QUERY messages.
     ///
-    /// Processes incoming DHCPv4-QUERY messages (DHCPv4 over DHCPv6)
-    /// from clients, and also DHCPv4 response from dhcp4_srv.
-    /// Payload DHCPv4 message from clients will be sent to dhcp4_srv, and
-    /// DHCPv4 response from dhcp4_srv will result DHCPv4-RESPONSE packet and
-    /// send back to clients.
+    /// Processes incoming DHCPv4-QUERY messages (DHCPv4 over DHCPv6) from clients.
+    /// Payload DHCPv4 message from clients will be sent to dhcp4_srv through ipc.
     ///
-    /// @param DHCPv4-QUERY message received from client
-    Pkt6Ptr processDHCPv4Query(const Pkt6Ptr& query);
+    /// @param query DHCPv4-QUERY message received from client
+    void processDHCPv4Query(const Pkt6Ptr& query);
+
+    /// @brief Processing DHCPv4 response from dhcpv4 server.
+    ///
+    /// Processes DHCPv4 response from dhcp4_srv (used by DHCPv4 over DHCPv6).
+    /// DHCPv4 response from dhcp4_srv will result a DHCPv4-RESPONSE packet and
+    /// send back to the client.
+    ///
+    /// @param query Raw DHCPv4 message and original DHCPv6 information
+    /// received from dhcp4_srv.
+    Pkt6Ptr processDHCPv4Response(const Pkt6Ptr& query);
     
     /// @brief Creates status-code option.
     ///

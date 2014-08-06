@@ -67,22 +67,22 @@ public:
     
     /// @brief Retrive and remove a Pkt4o6 in the receive queue
     ///
-    /// @return if not empty, Pkt4o6 in the head of the queue; otherwise
-    /// return a null pointer
+    /// @return if not empty, return the Pkt4o6 in the head of the queue;
+    /// otherwise return a null pointer
     Pkt4o6Ptr pop();
     
-    /// @brief Check if a given pkt4 is the current processing pkt4o6
-    bool isCurrent(Pkt4Ptr pkt4) {
+    /// @brief Check if a given pkt4 is from a DHCP4o6 request
+    ///
+    /// Since we don't add 4o6-related new fields into Pkt4,
+    /// after DHCPv4 server generated a Pkt4 response, this function is used
+    /// to check if current request is a DHCP4o6 request but not a 
+    /// DHCPv4 request.
+    bool isDHCP4o6Request(Pkt4Ptr pkt4) {
         return (current_ && pkt4 == current_->getPkt4());
     }
     
-    /// @brief Check if a given pkt6 is the current processing pkt4o6
-    bool isCurrent(Pkt6Ptr pkt6) {
-        return (current_ && pkt6 == current_->getPkt6());
-    }
-    
-    /// @brief Get current DHCP4o6IPC instance
-    Pkt4o6Ptr current() { return current_; }
+    /// @brief Get the instance of current processing Pkt4o6
+    Pkt4o6Ptr currentPkt4o6() { return current_; }
 
 protected:
     

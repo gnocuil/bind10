@@ -253,6 +253,7 @@ bool Dhcpv6Srv::run() {
         // 4o6
         if (!query && ipc_ && !ipc_->empty()) {
             query = ipc_->pop()->getPkt6();
+            query->setType(DHCPV4_RESPONSE);
         }
 
         try {
@@ -399,10 +400,14 @@ bool Dhcpv6Srv::run() {
                 rsp = processInfRequest(query);
                 break;
                 
-            case DHCPV4_QUERY: //process 4o6
-                rsp = processDHCPv4Query(query);
+            case DHCPV4_QUERY:
+                processDHCPv4Query(query);
                 break;
-                
+
+            case DHCPV4_RESPONSE:
+                rsp = processDHCPv4Response(query);
+                break;
+
             default:
                 // We received a packet type that we do not recognize.
                 LOG_DEBUG(dhcp6_logger, DBG_DHCP6_BASIC, DHCP6_UNKNOWN_MSG_RECEIVED)
@@ -2360,39 +2365,37 @@ Dhcpv6Srv::processInfRequest(const Pkt6Ptr& infRequest) {
     return reply;
 }
 
-Pkt6Ptr
-Dhcpv6Srv::processDHCPv4Query(const Pkt6Ptr& query) {//4o6
-    if (!ipc_)
-        return Pkt6Ptr();
-    Pkt6Ptr reply;
-    if (ipc_->isCurrent(query)) {
-        reply = Pkt6Ptr(new Pkt6(DHCPV4_RESPONSE, query->getTransid()));
-        
-        appendRequestedOptions(query, reply);//TODO: should we remove this?
-        
-        OptionPtr option(new Option(Option::V6,
-                                    OPTION_DHCPV4_MSG,
-                                    ipc_->current()->getDHCPv4MsgOption()));
-        reply->addOption(option);
+void
+Dhcpv6Srv::processDHCPv4Query(const Pkt6Ptr& query) {
+    try {
+        Pkt4o6Ptr pkt4o6(new Pkt4o6(query));
+        ipc_->sendPkt4o6(pkt4o6);
+    } catch (const Exception& ex) {
+        LOG_ERROR(dhcp6_logger, DHCP6_IPC_SEND_ERROR).arg(ex.what());
+    }
+}
 
-        //Add relay info
-        if (!query->relay_info_.empty()) {
-            reply->copyRelayInfo(query);
-        }
-    } else {
-        try {
-            Pkt4o6Ptr pkt4o6(new Pkt4o6(query));
-            ipc_->sendPkt4o6(pkt4o6);
-        } catch (const Exception& ex) {
-            //TODO: logging
-        }
+Pkt6Ptr
+Dhcpv6Srv::processDHCPv4Response(const Pkt6Ptr& query) {
+    Pkt6Ptr reply = Pkt6Ptr(new Pkt6(DHCPV4_RESPONSE, query->getTransid()));
+
+    appendRequestedOptions(query, reply);//TODO: should we remove this?
+        
+    OptionPtr option(new Option(Option::V6,
+                                OPTION_DHCPV4_MSG,
+                                ipc_->currentPkt4o6()->getDHCPv4MsgOption()));
+    reply->addOption(option);
+
+    //Add relay info
+    if (!query->relay_info_.empty()) {
+        reply->copyRelayInfo(query);
     }
     return reply;
 }
 
+
 void
 Dhcpv6Srv::enable4o6() {
-    puts("dhcp6 enable 4o6!!!");
     /// init DHCP4o6 IPC
     try {
         ipc_ = DHCP4o6IPCPtr(new DHCP4o6IPC("DHCPv4_over_DHCPv6_v4tov6",
@@ -2409,7 +2412,6 @@ Dhcpv6Srv::enable4o6() {
 
 void
 Dhcpv6Srv::disable4o6() {
-    puts("dhcp6 disable 4o6!!!");
     if (!ipc_)
         return;
     IfaceMgr::instance().deleteExternalSocket(ipc_->getSocket());
