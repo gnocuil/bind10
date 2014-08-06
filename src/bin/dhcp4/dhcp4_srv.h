@@ -26,7 +26,7 @@
 #include <dhcpsrv/subnet.h>
 #include <dhcpsrv/alloc_engine.h>
 #include <hooks/callout_handle.h>
-#include <dhcp/dhcp4o6_ipc.h> //4o6
+#include <dhcpsrv/dhcp4o6_ipc.h> //4o6
 
 #include <boost/noncopyable.hpp>
 

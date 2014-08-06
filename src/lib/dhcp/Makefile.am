@@ -52,7 +52,6 @@ libkea_dhcp___la_SOURCES += pkt_filter_inet6.cc pkt_filter_inet6.h
 
 #DHCP4o6
 libkea_dhcp___la_SOURCES += pkt4o6.cc pkt4o6.h
-libkea_dhcp___la_SOURCES += dhcp4o6_ipc.h dhcp4o6_ipc.cc
 
 if OS_LINUX
 libkea_dhcp___la_SOURCES += pkt_filter_lpf.cc pkt_filter_lpf.h

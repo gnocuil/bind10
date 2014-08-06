@@ -12,7 +12,7 @@
 // OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-#include <dhcp/dhcp4o6_ipc.h>
+#include <dhcpsrv/dhcp4o6_ipc.h>
 #include <dhcp/iface_mgr.h>
 
 namespace isc {
