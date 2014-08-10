@@ -23,11 +23,11 @@
 namespace isc {
 namespace dhcp {
 
-/// @brief Pkt4o6 exception thrown when construction fails.
-class DHCP4o6IPCSendError : public Exception {
+/// @brief Exception thrown when DHCP4o6IPC send() failed.
+class DHCP4o6IPCSendError : public isc::util::IPCSendError {
 public:
     DHCP4o6IPCSendError(const char* file, size_t line, const char* what) :
-        isc::Exception(file, line, what) { };
+        isc::util::IPCSendError(file, line, what) { };
 };
 
 /// @brief IPC class to pass Pkt4o6 between DHCPv4 and DHCPv6 servers
@@ -35,8 +35,8 @@ class DHCP4o6IPC : public isc::util::BaseIPC {
 public:
     /// @brief Default constructor.
     ///
-    /// This function calls methods in BaseIPC for socket processing
-    /// Method will throw if BaseIPC methods failed
+    /// This function calls BaseIPC::open() to initiate socket directly
+    /// Method will throw if BaseIPC::open() method failed
     ///
     /// @param local_filename Filename for receiving socket
     /// @param remote_filename Filename for sending socket
@@ -45,38 +45,43 @@ public:
     /// @brief Send a DHCPv4 ove DHCPv6 packet
     ///
     /// This function converts Pkt4o6 into binary data and sends it
-    /// through BaseIPC send() 
-    /// Method will throw if BaseIPC send() failed
+    /// through BaseIPC::send().
+    /// Method will throw if BaseIPC::send() failed
     ///
-    /// @param pkt4o6 Pointer of the packet to be sent
+    /// @param pkt4o6 Pointer to the packet to be sent
     void sendPkt4o6(const Pkt4o6Ptr& pkt4o6);
     
     /// @brief Receive a DHCPv4 ove DHCPv6 packet
     ///
-    /// This function calls BaseIPC recv() to receive binary data
+    /// This function calls BaseIPC::recv() to receive binary data
     /// and converts it into Pkt4o6
-    /// Received Pkt4o6 will be push into a queue and not returned
-    /// Method will throw if BaseIPC recv() failed or Pkt4o6
+    /// It pushes received Pkt4o6 into a queue and does not return immediately.
+    /// Method will throw if BaseIPC::recv() failed or Pkt4o6
     /// construction failed
     void recvPkt4o6();
     
-    /// @brief Test if receive queue is empty
+    /// @brief Test if Pkt4o6 receiving queue is empty.
     /// 
-    /// @return true if queue is empty
+    /// @return true if the Pkt4o6 receiving queue is empty.
     bool empty() const { return queue_.empty(); }
     
-    /// @brief Retrive and remove a Pkt4o6 in the receive queue
+    /// @brief Retrive a Pkt4o6 in the receiving queue and remove it.
     ///
-    /// @return if not empty, return the Pkt4o6 in the head of the queue;
-    /// otherwise return a null pointer
+    /// If the receiving queue is not empty, return the one 
+    /// in front of the queue and remove it from the queue.
+    ///
+    /// @return A pointer to the retrived Pkt4o6, or a null pointer if the
+    /// queue is empty.
     Pkt4o6Ptr pop();
     
-    /// @brief Check if a given pkt4 is from a DHCP4o6 request
+    /// @brief Check if a given pkt4 is from a DHCP4o6 request.
     ///
     /// Since we don't add 4o6-related new fields into Pkt4,
     /// after DHCPv4 server generated a Pkt4 response, this function is used
     /// to check if current request is a DHCP4o6 request but not a 
     /// DHCPv4 request.
+    ///
+    /// @return true if the given pkt4 is from current 4o6 request.
     bool isDHCP4o6Request(Pkt4Ptr pkt4) {
         return (current_ && pkt4 == current_->getPkt4());
     }
@@ -89,21 +94,10 @@ protected:
     /// @brief A queue of received DHCPv4 over DHCPv6 packets that has
     /// not been processed
     std::queue<Pkt4o6Ptr> queue_;
-    
-    /// @brief Static pointer to the sole instance of the DHCP4o6 IPC.
-    ///
-    /// This is required by callback function of iface_mgr
-//    static DHCP4o6IPC* instance_;
-  
+      
     /// @brief The current processing DHCPv4 over DHCPv6 packet
     Pkt4o6Ptr current_;
 };//DHCP4o6IPC class
-
-// The filename used for DHCPv4 server --> DHCPv6 server
-#define FILENAME_4TO6 "DHCPv4_over_DHCPv6_v4tov6"
-
-// The filename used for DHCPv4 server <-- DHCPv6 server
-#define FILENAME_6TO4 "DHCPv4_over_DHCPv6_v6tov4"
 
 typedef boost::shared_ptr<DHCP4o6IPC> DHCP4o6IPCPtr;
 
