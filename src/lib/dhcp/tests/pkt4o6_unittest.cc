@@ -44,22 +44,28 @@ using namespace isc::util;
 
 namespace {
 
+//Test buffer length
 const int LENGTH = 250;
 
+/// @brief A test fixture class for Pkt4o6.
 class Pkt4o6Test : public ::testing::Test {
 public:
     
-    uint8_t testData[LENGTH];
+    /// @brief Constructor.
     Pkt4o6Test() {
         for (int i = 0; i < LENGTH; i++) {
             testData[i] = i;
         }
     }
     
+    /// @brief Generate a 4o6 packet for testing.
+    ///
+    /// It first generates a Pkt6, and then generates a Pkt4o6 from the Pkt6.
+    ///
+    /// @return A pointer to allocated Pkt4o6 object
     Pkt4o6Ptr generatePkt4o6(){
-	    //construct a Pkt4o6
-        Pkt4Ptr pkt4(new Pkt4(testData,LENGTH));
-        Pkt6Ptr pkt6(new Pkt6(testData,LENGTH));
+	    //First generate a Pkt6
+        Pkt6Ptr pkt6(new Pkt6(testData, LENGTH));
         pkt6->setType(DHCPV4_QUERY);
         pkt6->setRemotePort(546);
         pkt6->setRemoteAddr(IOAddress("fe80::21e:8cff:fe9b:7349"));
@@ -67,24 +73,38 @@ public:
         pkt6->setLocalAddr(IOAddress("ff02::1:2"));
         pkt6->setIndex(2);
         pkt6->setIface("eth0");
+        
+        //Then generate a Pkt4, and put it into a OPTION_DHCPV4_MSG of the pkt6
+        Pkt4Ptr pkt4(new Pkt4(testData, LENGTH));
         pkt4->repack();
         isc::util::OutputBuffer tmp = pkt4->getBuffer();
         OptionBuffer p((uint8_t*)tmp.getData(),
-                       (uint8_t*)tmp.getData()+tmp.getLength());
+                       (uint8_t*)tmp.getData() + tmp.getLength());
         OptionPtr opt = OptionPtr(new Option(Option::V6, OPTION_DHCPV4_MSG, p));
         pkt6->addOption(opt);
+        
+	    //Finally generate a Pkt4o6
         Pkt4o6Ptr pkt4o6(new Pkt4o6(pkt6));
         return pkt4o6;
     }
 
+    /// @brief Generate a 4o6 packet for testing.
+    ///
+    /// It generates a Pkt4o6 directly from raw data.
+    ///
+    /// @return A pointer to allocated Pkt4o6 object
     Pkt4o6Ptr generatePkt4o6_2(){
-        Pkt4o6Ptr pkt4o6(new Pkt4o6(testData,LENGTH,testData,LENGTH));
+        Pkt4o6Ptr pkt4o6(new Pkt4o6(testData, LENGTH, testData, LENGTH));
         return pkt4o6;
     }
+
+protected:    
+    ///Buffer for test data
+    uint8_t testData[LENGTH];
 };
 
 
-//test Pkt4o6 class constructor
+//Test Pkt4o6 class constructor
 TEST_F(Pkt4o6Test, constructor) {
     Pkt4o6Ptr pkt4o6;
     uint8_t* data;
@@ -162,7 +182,7 @@ TEST_F(Pkt4o6Test, constructor) {
 
 }
 
-//test setJsonAttribute and getJsonAttribute
+//Test setJsonAttribute and getJsonAttribute
 TEST_F(Pkt4o6Test, jsonAttribute) {
 
     Pkt4o6Ptr pkt4o6 = generatePkt4o6();
@@ -188,7 +208,7 @@ TEST_F(Pkt4o6Test, jsonAttribute) {
     EXPECT_EQ(Iface,v6->getIface());
 }
 
-//test DHCPv4MsgOption
+//Test DHCPv4MsgOption
 TEST_F(Pkt4o6Test, generateDHCPv4MsgOption) {
     Pkt4o6Ptr pkt4o6 = generatePkt4o6();
 	
@@ -199,7 +219,7 @@ TEST_F(Pkt4o6Test, generateDHCPv4MsgOption) {
 
 }
 
-//test unicast/broadcast flag
+//Test unicast/broadcast flag
 TEST_F(Pkt4o6Test, unicastFlag) {
     //create and test a broadcast packet
     uint8_t buf0[] = {DHCPV4_QUERY, 0, 0, 0};//U=0

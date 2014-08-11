@@ -22,15 +22,20 @@ using namespace isc::util;
 
 namespace {
 
-
+/// @brief A test fixture class for BaseIPC.
 class IPCTest : public ::testing::Test {
-    public:
-        BaseIPC ipc1, ipc2;
-        IPCTest() :
-            ipc1("test_ipc_2to1", "test_ipc_1to2"),
-            ipc2("test_ipc_1to2", "test_ipc_2to1")
-        {
-        }
+public:
+    /// @brief Constructor.
+    ///
+    /// It initializes 2 BaseIPC objects.
+    IPCTest() :
+        ipc1("test_ipc_2to1", "test_ipc_1to2"),
+        ipc2("test_ipc_1to2", "test_ipc_2to1")
+    {
+    }
+protected:
+    /// BaseIPC objects for testing.
+    BaseIPC ipc1, ipc2;
 };
 
 // Test BaseIPC constructor

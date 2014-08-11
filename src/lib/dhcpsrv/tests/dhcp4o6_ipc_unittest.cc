@@ -43,22 +43,22 @@ using namespace isc::util;
 
 namespace {
 
-//test data & length for ipc sending
+//Test buffer length
 const int LENGTH = 250;
-uint8_t testData[LENGTH];
 
+/// @brief A test fixture class for DHCP4o6IPC.
 class DHCP4o6IPCTest : public ::testing::Test {
 public:
+
+    /// @brief Constructor.
     DHCP4o6IPCTest() {
         for (int i = 0; i < LENGTH; ++i)
             testData[i] = i;
     }
         
-    /// @brief Generates test 4o6 packet.
+    /// @brief Generate a 4o6 packet for testing.
     ///
-    /// Allocates and generates 4o6 packet using testData as raw data
-    ///
-    /// @return pointer to allocated Pkt4o6 object
+    /// @return A pointer to allocated Pkt4o6 object
     Pkt4o6Ptr generatePkt4o6(){
         Pkt4Ptr pkt4(new Pkt4(testData,LENGTH));
         Pkt6Ptr pkt6(new Pkt6(testData,LENGTH));
@@ -78,7 +78,10 @@ public:
         Pkt4o6Ptr pkt4o6(new Pkt4o6(pkt6));
         return pkt4o6;
     }
-
+    
+protected:    
+    ///Buffer for test data
+    uint8_t testData[LENGTH];
 };
 
 // This test verifies sending and receiving between v4/v6 IPCs
