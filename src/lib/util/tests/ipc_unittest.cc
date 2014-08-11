@@ -26,7 +26,9 @@ namespace {
 class IPCTest : public ::testing::Test {
     public:
         BaseIPC ipc1, ipc2;
-        IPCTest()
+        IPCTest() :
+            ipc1("test_ipc_2to1", "test_ipc_1to2"),
+            ipc2("test_ipc_1to2", "test_ipc_2to1")
         {
         }
 };
@@ -41,7 +43,7 @@ TEST_F(IPCTest, constructor) {
 TEST_F(IPCTest, openSocket) {
 	int fd;
 	EXPECT_NO_THROW(
-    	fd = ipc1.openSocket();
+    	fd = ipc1.open();
     );
 	
 	EXPECT_EQ(fd, ipc1.getSocket());
@@ -60,22 +62,10 @@ TEST_F(IPCTest, bidirectionalTransmission) {
 	    data2[i] = -i;
 	}
 	EXPECT_NO_THROW(
-    	ipc1.openSocket();
+    	ipc1.open();
     );
 	EXPECT_NO_THROW(
-    	ipc2.openSocket();
-    );
-	EXPECT_NO_THROW(
-    	ipc1.bindSocket("test_ipc_2to1");
-    );
-	EXPECT_NO_THROW(
-    	ipc2.bindSocket("test_ipc_1to2");
-    );
-	EXPECT_NO_THROW(
-    	ipc1.setRemote("test_ipc_1to2");
-    );
-	EXPECT_NO_THROW(
-    	ipc2.setRemote("test_ipc_2to1");
+    	ipc2.open();
     );
       
 	OutputBuffer sendbuf1(LEN1), sendbuf2(LEN2);
@@ -119,24 +109,13 @@ TEST_F(IPCTest, exceptions) {
         ipc1.recv(),
         IPCRecvError
     );
-    EXPECT_NO_THROW(
-        ipc1.bindSocket("test_socket_name")
-    );
-    EXPECT_THROW(
-        ipc1.bindSocket("test_socket_name"),
-        IPCBindError
-    );
-    EXPECT_THROW(
-        ipc1.send(OutputBuffer(10)),
-        IPCSendError
-    );
-    ipc1.setRemote("test_socket_name2");
     EXPECT_THROW(
         ipc1.send(OutputBuffer(10)),
         IPCSendError
     );
     EXPECT_NO_THROW(
-        ipc2.bindSocket("test_socket_name2")
+        ipc1.open();
+        ipc2.open();
     );
     EXPECT_NO_THROW(
         ipc1.send(OutputBuffer(10))

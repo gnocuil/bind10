@@ -57,7 +57,10 @@ public:
 
     /// @brief BaseIPC constructor.
     ///
-    /// Creates BaseIPC object that represents UNIX communication.
+    /// Creates BaseIPC object for UNIX socket communication.
+    ///
+    /// @param local_filename Filename for receiving socket
+    /// @param remote_filename Filename for sending socket
     BaseIPC(const std::string& local_filename, const std::string& remote_filename) :
         socketfd_(-1),
         remote_addr_len_(0),
