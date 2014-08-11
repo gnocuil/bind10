@@ -26,7 +26,7 @@
 #include <dhcpsrv/subnet.h>
 #include <dhcpsrv/alloc_engine.h>
 #include <hooks/callout_handle.h>
-#include <dhcpsrv/dhcp4o6_ipc.h> //4o6
+#include <dhcpsrv/dhcp4o6_ipc.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -195,12 +195,12 @@ public:
                                       
     /// @brief Enable DHCPv4 over DHCPv6 function
     ///
-    /// This method enables 4o6 function in dhcpv4 server
+    /// Calling this method enables 4o6 function in dhcpv4 server
     void enable4o6();
     
     /// @brief Disable DHCPv4 over DHCPv6 function
     ///
-    /// This method disables 4o6 function in dhcpv4 server
+    /// Calling this method disables 4o6 function in dhcpv4 server
     void disable4o6();
     
 protected:
@@ -722,7 +722,7 @@ private:
     int hook_index_subnet4_select_;
     int hook_index_pkt4_send_;
     
-    /// IPC used for communation with dhcp4_srv
+    /// IPC used for communation with dhcp4_srv (for RFC7341).
     DHCP4o6IPCPtr ipc_;
 };
 

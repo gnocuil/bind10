@@ -81,7 +81,7 @@
 #define STATUS_NotConfigured     9
 #define STATUS_NotAllowed       10
 
-/* DHCPv4 Message Option, from RFC-ietf-dhc-dhcpv4-over-dhcpv6 */
+/* DHCPv4 Message Option, defined in RFC 7341 */
 #define OPTION_DHCPV4_MSG         87 
 
 /*
@@ -105,7 +105,7 @@
 
 /*
  * DHCPv4-query and DHCPv4-response message types,
- * defined in RFC-ietf-dhc-dhcpv4-over-dhcpv6
+ * defined in RFC 7341
  */
 #define DHCPV4_QUERY              20
 #define DHCPV4_RESPONSE           21

@@ -25,39 +25,50 @@
 namespace isc {
 namespace util {
 
-/// @brief Exception thrown when BaseIPC open() failed.
+/// @brief Exception thrown when BaseIPC::open() failed.
 class IPCOpenError : public Exception {
 public:
     IPCOpenError(const char* file, size_t line, const char* what) :
     isc::Exception(file, line, what) { };
 };
 
-/// @brief Exception thrown when BaseIPC recv() failed.
+/// @brief Exception thrown when BaseIPC::recv() failed.
 class IPCRecvError : public Exception {
 public:
     IPCRecvError(const char* file, size_t line, const char* what) :
     isc::Exception(file, line, what) { };
 };
 
-/// @brief Exception thrown when BaseIPC send() failed.
+/// @brief Exception thrown when BaseIPC::send() failed.
 class IPCSendError : public Exception {
 public:
     IPCSendError(const char* file, size_t line, const char* what) :
     isc::Exception(file, line, what) { };
 };
 
-/// @brief IPC tool based on UNIX domain socket
+/// @brief An Inter Process Communication(IPC) tool based on UNIX domain socket.
+///
+/// It is used by 2 processes for data communication. It provides methods for
+/// bi-directional binary data transfer.
+///
+/// There should be 2 instances (a sender and a receiver) using this tool
+/// at the same time. The filename for the sockets must match (i.e. 
+/// the remote filename of the sender = the local filename of the receiver).
+///
+/// It should be used as a base class and not directly used for future classes
+/// implementing inter process communication.
 class BaseIPC {
 public:
 
     /// @brief Packet reception buffer size
     ///
-    /// receive buffer size of UNIX socket
+    /// Receive buffer size of UNIX socket
     static const uint32_t RCVBUFSIZE = 4096;
 
     /// @brief BaseIPC constructor.
     ///
-    /// Creates BaseIPC object for UNIX socket communication.
+    /// Creates BaseIPC object for UNIX socket communication using the given
+    /// filenames. It doesn't create the socket immediately.
     ///
     /// @param local_filename Filename for receiving socket
     /// @param remote_filename Filename for sending socket
@@ -71,7 +82,7 @@ public:
 
     /// @brief BaseIPC destructor.
     ///
-    /// Delete a BaseIPC object.
+    /// It closes the socket explicitly.
     virtual ~BaseIPC() { closeIPC(); }
     
     
@@ -79,7 +90,7 @@ public:
     ///
     /// Method will throw if socket creation fails.
     ///
-    /// @return socket descriptor
+    /// @return A int value of the socket descriptor.
     int open() {
         //create socket
         int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
@@ -101,15 +112,14 @@ public:
         socketfd_ = -1;
     }
 
-    /// @brief Send message to a host that the same socket are binding. 
+    /// @brief Send data.
     /// 
-    /// @param buf the date are prepared to send.
+    /// @param buf The data to be sent.
     ///
-    /// open() MUST be called before calling this function
-    /// Method will throw if open() has not been called
-    /// or sendto() failed
+    /// Method will throw if open() has not been called or sendto() failed. 
+    /// open() MUST be called before calling this function.
     ///
-    /// @return the number of data have been sent.
+    /// @return The number of bytes sent.
     int send(const isc::util::OutputBuffer &buf) { 
         if (remote_addr_len_ == 0) {
             isc_throw(IPCSendError, "Remote address unset");
@@ -123,12 +133,12 @@ public:
         return count;
     }
 
-    /// @brief receive message from a host that the same socket are binding.
+    /// @brief Receive data.
     ///
-    /// open() MUST be called before calling this function
-    /// Method will throw if socket recvfrom() failed
+    /// Method will throw if socket recvfrom() failed.
+    /// open() MUST be called before calling this function.
     ///
-    /// @return the data have been received.
+    /// @return The number of bytes received.
     isc::util::InputBuffer recv() {
         uint8_t buf[RCVBUFSIZE];
         int len = recvfrom(socketfd_, buf, RCVBUFSIZE, 0, NULL, NULL);
@@ -140,23 +150,27 @@ public:
         return ibuf;
     }
 
-    /// @brief get socket value.
+    /// @brief Get socket fd.
     /// 
-    /// @return the socket value this class is using.
+    /// @return The socket fd of the unix socket.
     int getSocket() { return socketfd_; }
 
 protected:
 
-    /// @brief set remote filename
+    /// @brief Set remote filename
+    ///
+    /// The remote filename is used for sending data. The filename is given
+    /// in the constructor.
     void setRemoteFilename() {
-        //init address
         memset(&remote_addr_, 0, sizeof(struct sockaddr_un));
         remote_addr_.sun_family = AF_UNIX;
         strcpy(&remote_addr_.sun_path[1], remote_filename_.c_str());
         remote_addr_len_ = sizeof(sa_family_t) + remote_filename_.size() + 1;
     }
     
-    /// @brief bind UNIX socket to the given filename
+    /// @brief Bind the UNIX socket to the given filename
+    ///
+    /// The filename is given in the constructor.
     ///
     /// Method will throw if socket binding fails.
     void bindSocket() {
@@ -178,13 +192,13 @@ protected:
     /// UNIX socket value.
     int socketfd_;
     
-    ///remote UNIX socket address 
+    /// Remote UNIX socket address 
     struct sockaddr_un remote_addr_;
     
-    ///length of remote_addr_
+    /// Length of remote_addr_
     int remote_addr_len_;
 
-    /// filename for receiving and sending socket
+    /// Filename for receiving and sending socket
     std::string local_filename_, remote_filename_;
 
 }; // BaseIPC class

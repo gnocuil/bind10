@@ -23,7 +23,7 @@
 namespace isc {
 namespace dhcp {
 
-/// @brief Exception thrown when DHCP4o6IPC send() failed.
+/// @brief Exception thrown when DHCP4o6IPC::send() failed.
 class DHCP4o6IPCSendError : public isc::util::IPCSendError {
 public:
     DHCP4o6IPCSendError(const char* file, size_t line, const char* what) :

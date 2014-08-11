@@ -154,12 +154,12 @@ public:
 
     /// @brief Enable DHCPv4 over DHCPv6 function
     ///
-    /// This method enables 4o6 function in dhcpv6 server
+    /// Calling this method enables 4o6 function in dhcpv6 server
     void enable4o6();
     
     /// @brief Disable DHCPv4 over DHCPv6 function
     ///
-    /// This method disables 4o6 function in dhcpv6 server
+    /// Calling this method disables 4o6 function in dhcpv6 server
     void disable4o6();
 
 protected:
@@ -700,7 +700,7 @@ private:
     /// UDP port number on which server listens.
     uint16_t port_;
     
-    /// IPC used for communation with dhcp4_srv
+    /// IPC used for communation with dhcp4_srv (for RFC7341).
     DHCP4o6IPCPtr ipc_;
 
 protected:
