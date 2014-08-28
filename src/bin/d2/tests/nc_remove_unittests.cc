@@ -35,9 +35,10 @@ public:
     NameRemoveStub(IOServicePtr& io_service,
                    dhcp_ddns::NameChangeRequestPtr& ncr,
                    DdnsDomainPtr& forward_domain,
-                   DdnsDomainPtr& reverse_domain)
+                   DdnsDomainPtr& reverse_domain,
+                   D2CfgMgrPtr& cfg_mgr)
         : NameRemoveTransaction(io_service, ncr, forward_domain,
-                                reverse_domain),
+                                reverse_domain, cfg_mgr),
           simulate_send_exception_(false),
           simulate_build_request_exception_(false) {
     }
@@ -56,10 +57,8 @@ public:
     /// the simulate_send_exception_ flag is true.
     ///
     /// @param comment Parameter is unused, but present in base class method
-    /// @param use_tsig Parameter is unused, but present in base class method.
     ///
-    virtual void sendUpdate(const std::string& /* comment */,
-                            bool /* use_tsig = false */) {
+    virtual void sendUpdate(const std::string& /* comment */) {
         if (simulate_send_exception_) {
             // Make the flag a one-shot by resetting it.
             simulate_send_exception_ = false;
@@ -212,7 +211,8 @@ public:
         // Now create the test transaction as would occur in update manager.
         return (NameRemoveStubPtr(new NameRemoveStub(io_service_, ncr_,
                                                      forward_domain_,
-                                                     reverse_domain_)));
+                                                     reverse_domain_,
+                                                     cfg_mgr_)));
     }
 
     /// @brief Creates a transaction which requests an IPv6 DNS update.
@@ -230,7 +230,8 @@ public:
         // Now create the test transaction as would occur in update manager.
         return (NameRemoveStubPtr(new NameRemoveStub(io_service_, ncr_,
                                                      forward_domain_,
-                                                     reverse_domain_)));
+                                                     reverse_domain_,
+                                                     cfg_mgr_)));
     }
 
     /// @brief Create a test transaction at a known point in the state model.
@@ -268,6 +269,7 @@ public:
 /// 2. Valid construction functions properly
 TEST(NameRemoveTransaction, construction) {
     IOServicePtr io_service(new isc::asiolink::IOService());
+    D2CfgMgrPtr cfg_mgr(new D2CfgMgr());
 
     const char* msg_str =
         "{"
@@ -288,18 +290,19 @@ TEST(NameRemoveTransaction, construction) {
     DdnsDomainPtr empty_domain;
 
     ASSERT_NO_THROW(ncr = dhcp_ddns::NameChangeRequest::fromJSON(msg_str));
-    ASSERT_NO_THROW(forward_domain.reset(new DdnsDomain("*", "", servers)));
-    ASSERT_NO_THROW(reverse_domain.reset(new DdnsDomain("*", "", servers)));
+    ASSERT_NO_THROW(forward_domain.reset(new DdnsDomain("*", servers)));
+    ASSERT_NO_THROW(reverse_domain.reset(new DdnsDomain("*", servers)));
 
     // Verify that construction with wrong change type fails.
     EXPECT_THROW(NameRemoveTransaction(io_service, ncr,
-                                       forward_domain, reverse_domain),
+                                       forward_domain, reverse_domain, cfg_mgr),
                                        NameRemoveTransactionError);
 
     // Verify that a valid construction attempt works.
     ncr->setChangeType(isc::dhcp_ddns::CHG_REMOVE);
     EXPECT_NO_THROW(NameRemoveTransaction(io_service, ncr,
-                                          forward_domain, reverse_domain));
+                                          forward_domain, reverse_domain,
+                                          cfg_mgr));
 }
 
 /// @brief Tests event and state dictionary construction and verification.

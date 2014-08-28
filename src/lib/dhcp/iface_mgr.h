@@ -49,6 +49,13 @@ public:
         isc::Exception(file, line, what) { };
 };
 
+/// @brief Exception thrown when a call to select is interrupted by a signal.
+class SignalInterruptOnSelect : public Exception {
+public:
+    SignalInterruptOnSelect(const char* file, size_t line, const char* what) :
+        isc::Exception(file, line, what) { };
+};
+
 /// @brief IfaceMgr exception thrown thrown when socket opening
 /// or configuration failed.
 class SocketConfigError : public Exception {
@@ -72,6 +79,7 @@ public:
     SocketWriteError(const char* file, size_t line, const char* what) :
         isc::Exception(file, line, what) { };
 };
+
 
 /// Holds information about socket.
 struct SocketInfo {
@@ -120,12 +128,21 @@ struct SocketInfo {
 
 };
 
-
 /// @brief Represents a single network interface
 ///
 /// Iface structure represents network interface with all useful
 /// information, like name, interface index, MAC address and
 /// list of assigned addresses
+///
+/// This class also holds the pointer to the socket read buffer.
+/// Functions reading from the socket may utilize this buffer to store the
+/// data being read from the socket. The advantage of using the
+/// pre-allocated buffer is that the buffer is allocated only once, rather
+/// than on every read. In addition, some OS specific code (e.g. BPF)
+/// may require use of fixed-size buffers. The size of such a buffer is
+/// returned by the OS kernel when the socket is opened. Hence, it is
+/// convenient to allocate the buffer when the socket is being opened and
+/// utilze it throughout the lifetime of the socket.
 class Iface {
 public:
 
@@ -153,6 +170,11 @@ public:
     /// @param name name of the interface
     /// @param ifindex interface index (unique integer identifier)
     Iface(const std::string& name, int ifindex);
+
+    /// @brief Destructor.
+    ///
+    /// Deallocates the socket read buffer.
+    ~Iface();
 
     /// @brief Closes all open sockets on interface.
     void closeSockets();
@@ -257,6 +279,12 @@ public:
     /// for the interface (if true), or not (false).
     bool getAddress4(isc::asiolink::IOAddress& address) const;
 
+    /// @brief Check if the interface has the specified address assigned.
+    ///
+    /// @param address Address to be checked.
+    /// @return true if address is assigned to the intefrace, false otherwise.
+    bool hasAddress(const isc::asiolink::IOAddress& address) const;
+
     /// @brief Adds an address to an interface.
     ///
     /// This only adds an address to collection, it does not physically
@@ -330,6 +358,29 @@ public:
         return unicasts_;
     }
 
+    /// @brief Returns the pointer to the buffer used for data reading.
+    ///
+    /// The returned pointer is only valid during the lifetime of the
+    /// object which returns it or until the buffer is resized.
+    /// This function is meant to be used with socket API to gather
+    /// data from the socket.
+    ///
+    /// @return Pointer to the first element of the read buffer or
+    /// NULL if the buffer is empty.
+    uint8_t* getReadBuffer() const {
+        return (read_buffer_);
+    }
+
+    /// @brief Returns the current size of the socket read buffer.
+    size_t getReadBufferSize() const {
+        return (read_buffer_size_);
+    }
+
+    /// @brief Reallocates the socket read buffer.
+    ///
+    /// @param new_size New size of the buffer.
+    void resizeReadBuffer(const size_t new_size);
+
 protected:
     /// Socket used to send data.
     SocketCollection sockets_;
@@ -388,6 +439,16 @@ public:
     /// Indicates that IPv6 sockets should (true) or should not (false)
     /// be opened on this interface.
     bool inactive6_;
+
+private:
+
+    /// @brief Pointer to the buffer holding the data read from the socket.
+    ///
+    /// See @c Iface manager description for details.
+    uint8_t* read_buffer_;
+
+    /// @brief Allocated size of the read buffer.
+    size_t read_buffer_size_;
 };
 
 /// @brief This type describes the callback function invoked when error occurs
@@ -494,6 +555,9 @@ public:
     /// IPv6 address is read from interfaces.txt file.
     void detectIfaces();
 
+    /// @brief Clears unicast addresses on all interfaces.
+    void clearUnicasts();
+
     /// @brief Return most suitable socket for transmitting specified IPv6 packet.
     ///
     /// This method takes Pkt6 (see overloaded implementation that takes
@@ -551,37 +615,47 @@ public:
     /// @return true if sending was successful
     bool send(const Pkt4Ptr& pkt);
 
-    /// @brief Tries to receive IPv6 packet over open IPv6 sockets.
+    /// @brief Tries to receive DHCPv6 message over open IPv6 sockets.
     ///
-    /// Attempts to receive a single IPv6 packet of any of the open IPv6 sockets.
-    /// If reception is successful and all information about its sender
-    /// are obtained, Pkt6 object is created and returned.
+    /// Attempts to receive a single DHCPv6 message over any of the open IPv6
+    /// sockets. If reception is successful and all information about its
+    /// sender is obtained, Pkt6 object is created and returned.
     ///
-    /// TODO Start using select() and add timeout to be able
-    /// to not wait infinitely, but rather do something useful
-    /// (e.g. remove expired leases)
+    /// This method also checks if data arrived over registered external socket.
+    /// This data may be of a different protocol family than AF_INET6.
     ///
     /// @param timeout_sec specifies integral part of the timeout (in seconds)
     /// @param timeout_usec specifies fractional part of the timeout
     /// (in microseconds)
     ///
     /// @throw isc::BadValue if timeout_usec is greater than one million
-    /// @throw isc::dhcp::SocketReadError if error occured when receiving a packet.
+    /// @throw isc::dhcp::SocketReadError if error occured when receiving a
+    /// packet.
+    /// @throw isc::dhcp::SignalInterruptOnSelect when a call to select() is
+    /// interrupted by a signal.
+    ///
     /// @return Pkt6 object representing received packet (or NULL)
     Pkt6Ptr receive6(uint32_t timeout_sec, uint32_t timeout_usec = 0);
 
     /// @brief Tries to receive IPv4 packet over open IPv4 sockets.
     ///
-    /// Attempts to receive a single IPv4 packet of any of the open IPv4 sockets.
-    /// If reception is successful and all information about its sender
-    /// are obtained, Pkt4 object is created and returned.
+    /// Attempts to receive a single DHCPv4 message over any of the open
+    /// IPv4 sockets. If reception is successful and all information about
+    /// its sender is obtained, Pkt4 object is created and returned.
+    ///
+    /// This method also checks if data arrived over registered external socket.
+    /// This data may be of a different protocol family than AF_INET.
     ///
     /// @param timeout_sec specifies integral part of the timeout (in seconds)
     /// @param timeout_usec specifies fractional part of the timeout
     /// (in microseconds)
     ///
     /// @throw isc::BadValue if timeout_usec is greater than one million
-    /// @throw isc::dhcp::SocketReadError if error occured when receiving a packet.
+    /// @throw isc::dhcp::SocketReadError if error occured when receiving a
+    /// packet.
+    /// @throw isc::dhcp::SignalInterruptOnSelect when a call to select() is
+    /// interrupted by a signal.
+    ///
     /// @return Pkt4 object representing received packet (or NULL)
     Pkt4Ptr receive4(uint32_t timeout_sec, uint32_t timeout_usec = 0);
 
@@ -667,6 +741,11 @@ public:
 
     /// @brief Opens IPv6 sockets on detected interfaces.
     ///
+    /// This method opens sockets only on interfaces which have the
+    /// @c inactive6_ field set to false (are active). If the interface is active
+    /// but it is not running, it is down, or is a loopback interface,
+    /// an error is reported.
+    ///
     /// On the systems with multiple interfaces, it is often desired that the
     /// failure to open a socket on a particular interface doesn't cause a
     /// fatal error and sockets should be opened on remaining interfaces.
@@ -707,14 +786,10 @@ public:
 
     /// @brief Opens IPv4 sockets on detected interfaces.
     ///
-    /// This function attempts to open sockets on all interfaces which have been
-    /// detected by @c IfaceMgr and meet the following conditions:
-    /// - interface is not a local loopback,
-    /// - interface is running (connected),
-    /// - interface is up,
-    /// - interface is active, e.g. selected from the configuration to be used
-    /// to listen DHCPv4 messages,
-    /// - interface has an IPv4 address assigned.
+    /// This method opens sockets only on interfaces which have the
+    /// @c inactive4_ field set to false (are active). If the interface is active
+    /// but it is not running, it is down, or is a loopback interface,
+    /// an error is reported.
     ///
     /// The type of the socket being open depends on the selected Packet Filter
     /// represented by a class derived from @c isc::dhcp::PktFilter abstract
@@ -898,7 +973,10 @@ public:
     /// @brief Checks if there is a socket open and bound to an address.
     ///
     /// This function checks if one of the sockets opened by the IfaceMgr is
-    /// bound to the IP address specified as the method parameter.
+    /// bound to the IP address specified as the method parameter. If the
+    /// socket is bound to the port (and address is unspecified), the
+    /// method will check if the address passed in the argument is configured
+    /// on an interface.
     ///
     /// @param addr Address of the socket being searched.
     ///
@@ -1020,11 +1098,10 @@ private:
 
     /// @brief Open an IPv6 socket with multicast support.
     ///
-    /// This function opens socket(s) to allow reception of the DHCPv6 sent
-    /// to multicast address. It opens an IPv6 socket, binds it to link-local
-    /// address and joins multicast group (on non-Linux systems) or opens two
-    /// IPv6 sockets and binds one of them to link-local address and another
-    /// one to multicast address (on Linux systems).
+    /// This function opens a socket capable of receiving messages sent to
+    /// the All_DHCP_Relay_Agents_and_Servers (ff02::1:2) multicast address.
+    /// The socket is bound to the in6addr_any address and the IPV6_JOIN_GROUP
+    /// option is set to point to the ff02::1:2 multicast address.
     ///
     /// @note This function is intended to be called internally by the
     /// @c IfaceMgr::openSockets6. It is not intended to be called from any

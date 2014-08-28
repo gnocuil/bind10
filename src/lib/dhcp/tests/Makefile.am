@@ -5,7 +5,7 @@ AM_CPPFLAGS += $(BOOST_INCLUDES)
 AM_CPPFLAGS += -DTEST_DATA_BUILDDIR=\"$(abs_top_builddir)/src/lib/dhcp/tests\"
 AM_CPPFLAGS += -DINSTALL_PROG=\"$(abs_top_srcdir)/install-sh\"
 
-AM_CXXFLAGS = $(B10_CXXFLAGS)
+AM_CXXFLAGS = $(KEA_CXXFLAGS)
 
 # Some versions of GCC warn about some versions of Boost regarding
 # missing initializer for members in its posix_time.
@@ -81,8 +81,14 @@ libdhcp___unittests_SOURCES += pkt_filter6_test_utils.h pkt_filter6_test_utils.c
 #4o6
 libdhcp___unittests_SOURCES += pkt4o6_unittest.cc
 
+# Utilize Linux Packet Filtering on Linux.
 if OS_LINUX
 libdhcp___unittests_SOURCES += pkt_filter_lpf_unittest.cc
+endif
+
+# Utilize Berkeley Packet Filtering on BSD.
+if OS_BSD
+libdhcp___unittests_SOURCES += pkt_filter_bpf_unittest.cc
 endif
 
 libdhcp___unittests_SOURCES += protocol_util_unittest.cc

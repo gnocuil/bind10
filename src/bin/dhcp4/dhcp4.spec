@@ -32,13 +32,13 @@
 
       { "item_name": "renew-timer",
         "item_type": "integer",
-        "item_optional": false,
+        "item_optional": true,
         "item_default": 1000
       },
 
       { "item_name": "rebind-timer",
         "item_type": "integer",
-        "item_optional": false,
+        "item_optional": true,
         "item_default": 2000
       },
 
@@ -346,28 +346,28 @@
                 "item_type": "string",
                 "item_optional": true,
                 "item_default": "127.0.0.1",
-                "item_description" : "IP address of b10-dhcp-ddns (IPv4 or IPv6)"
+                "item_description" : "IP address of kea-dhcp-ddns (IPv4 or IPv6)"
             },
             {
                 "item_name": "server-port",
                 "item_type": "integer",
                 "item_optional": true,
                 "item_default": 53001,
-                "item_description" : "port number of b10-dhcp-ddns"
+                "item_description" : "port number of kea-dhcp-ddns"
             },
             {
                 "item_name": "sender-ip",
                 "item_type": "string",
                 "item_optional": true,
                 "item_default": "",
-                "item_description" : "IP address from which to send to b10-dhcp-ddns (IPv4 or IPv6)"
+                "item_description" : "IP address from which to send to kea-dhcp-ddns (IPv4 or IPv6)"
             },
             {
                 "item_name": "sender-port",
                 "item_type": "integer",
                 "item_optional": true,
                 "item_default": 0,
-                "item_description" : "port number from which to send to b10-dhcp-ddns"
+                "item_description" : "port number from which to send to kea-dhcp-ddns"
             },
             {
                 "item_name": "max-queue-size",
@@ -381,7 +381,7 @@
                 "item_type": "string",
                 "item_optional": true,
                 "item_default": "UDP",
-                "item_description" : "Socket protocol to use with b10-dhcp-ddns"
+                "item_description" : "Socket protocol to use with kea-dhcp-ddns"
             },
             {
                 "item_name": "ncr-format",

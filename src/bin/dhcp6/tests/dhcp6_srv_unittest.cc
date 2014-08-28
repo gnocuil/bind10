@@ -26,7 +26,7 @@
 #include <dhcp/option_string.h>
 #include <dhcp/option_vendor.h>
 #include <dhcp/iface_mgr.h>
-#include <dhcp6/config_parser.h>
+#include <dhcp6/json_config_parser.h>
 #include <dhcp/dhcp6.h>
 #include <dhcp/docsis3_option_defs.h>
 #include <dhcp/tests/iface_mgr_test_config.h>
@@ -197,12 +197,12 @@ TEST_F(Dhcpv6SrvTest, basic) {
 
     ASSERT_NO_THROW( {
         // Skip opening any sockets
-        srv.reset(new Dhcpv6Srv(0));
+        srv.reset(new NakedDhcpv6Srv(0));
     });
     srv.reset();
     ASSERT_NO_THROW({
         // open an unpriviledged port
-        srv.reset(new Dhcpv6Srv(DHCP6_SERVER_PORT + 10000));
+        srv.reset(new NakedDhcpv6Srv(DHCP6_SERVER_PORT + 10000));
     });
 }
 
@@ -289,12 +289,12 @@ TEST_F(Dhcpv6SrvTest, advertiseOptions) {
     IfaceMgrTestConfig test_config(true);
 
     ConstElementPtr x;
-    string config = "{ \"interfaces\": [ \"all\" ],"
+    string config = "{ \"interfaces\": [ \"*\" ],"
         "\"preferred-lifetime\": 3000,"
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet6\": [ { "
-        "    \"pool\": [ \"2001:db8:1::/64\" ],"
+        "    \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ],"
         "    \"subnet\": \"2001:db8:1::/48\", "
         "    \"interface\": \"eth0\", "
         "    \"option-data\": [ {"
@@ -1557,7 +1557,7 @@ TEST_F(Dhcpv6SrvTest, vendorOptionsORO) {
 
     IfaceMgrTestConfig test_config(true);
 
-    string config = "{ \"interfaces\": [ \"all\" ],"
+    string config = "{ \"interfaces\": [ \"*\" ],"
         "\"preferred-lifetime\": 3000,"
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
@@ -1578,7 +1578,7 @@ TEST_F(Dhcpv6SrvTest, vendorOptionsORO) {
         "          \"csv-format\": True"
         "        }],"
         "\"subnet6\": [ { "
-        "    \"pool\": [ \"2001:db8:1::/64\" ],"
+        "    \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ],"
         "    \"subnet\": \"2001:db8:1::/48\", "
         "    \"renew-timer\": 1000, "
         "    \"rebind-timer\": 1000, "
@@ -1642,7 +1642,7 @@ TEST_F(Dhcpv6SrvTest, vendorOptionsORO) {
 // src/lib/dhcp/docsis3_option_defs.h.
 TEST_F(Dhcpv6SrvTest, vendorOptionsDocsisDefinitions) {
     ConstElementPtr x;
-    string config_prefix = "{ \"interfaces\": [ \"all\" ],"
+    string config_prefix = "{ \"interfaces\": [ \"*\" ],"
         "\"preferred-lifetime\": 3000,"
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
@@ -1655,7 +1655,7 @@ TEST_F(Dhcpv6SrvTest, vendorOptionsDocsisDefinitions) {
         "          \"csv-format\": True"
         "        }],"
         "\"subnet6\": [ { "
-        "    \"pool\": [ \"2001:db8:1::/64\" ],"
+        "    \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ],"
         "    \"subnet\": \"2001:db8:1::/48\", "
         "    \"renew-timer\": 1000, "
         "    \"rebind-timer\": 1000, "
@@ -1811,11 +1811,11 @@ TEST_F(Dhcpv6SrvTest, clientClassify2) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet6\": [ "
-        " {  \"pool\": [ \"2001:db8:1::/64\" ],"
+        " {  \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ],"
         "    \"subnet\": \"2001:db8:1::/48\", "
         "    \"client-class\": \"foo\" "
         " }, "
-        " {  \"pool\": [ \"2001:db8:2::/64\" ],"
+        " {  \"pools\": [ { \"pool\": \"2001:db8:2::/64\" } ],"
         "    \"subnet\": \"2001:db8:2::/48\", "
         "    \"client-class\": \"xyzzy\" "
         " } "
@@ -1885,13 +1885,13 @@ TEST_F(Dhcpv6SrvTest, relayOverride) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet6\": [ "
-        " {  \"pool\": [ \"2001:db8:1::/64\" ],"
+        " {  \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ],"
         "    \"subnet\": \"2001:db8:1::/48\", "
         "    \"relay\": { "
         "        \"ip-address\": \"2001:db8:3::1\""
         "    }"
         " }, "
-        " {  \"pool\": [ \"2001:db8:2::/64\" ],"
+        " {  \"pools\": [ { \"pool\": \"2001:db8:2::/64\" } ],"
         "    \"subnet\": \"2001:db8:2::/48\", "
         "    \"relay\": { "
         "        \"ip-address\": \"2001:db8:3::2\""
@@ -1960,14 +1960,14 @@ TEST_F(Dhcpv6SrvTest, relayOverrideAndClientClass) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet6\": [ "
-        " {  \"pool\": [ \"2001:db8:1::/64\" ],"
+        " {  \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ],"
         "    \"subnet\": \"2001:db8:1::/48\", "
         "    \"client-class\": \"foo\", "
         "    \"relay\": { "
         "        \"ip-address\": \"2001:db8:3::1\""
         "    }"
         " }, "
-        " {  \"pool\": [ \"2001:db8:2::/64\" ],"
+        " {  \"pools\": [ { \"pool\": \"2001:db8:2::/64\" } ],"
         "    \"subnet\": \"2001:db8:2::/48\", "
         "    \"relay\": { "
         "        \"ip-address\": \"2001:db8:3::1\""

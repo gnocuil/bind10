@@ -82,18 +82,17 @@ namespace dhcp {
 
 const std::string Dhcpv4Srv::VENDOR_CLASS_PREFIX("VENDOR_CLASS_");
 
-Dhcpv4Srv::Dhcpv4Srv(uint16_t port, const char* dbconfig, const bool use_bcast,
+Dhcpv4Srv::Dhcpv4Srv(uint16_t port, const bool use_bcast,
                      const bool direct_response_desired)
-: shutdown_(true), alloc_engine_(), port_(port),
-    use_bcast_(use_bcast), hook_index_pkt4_receive_(-1),
-    hook_index_subnet4_select_(-1), hook_index_pkt4_send_(-1) {
+    : shutdown_(true), alloc_engine_(), port_(port),
+      use_bcast_(use_bcast), hook_index_pkt4_receive_(-1),
+      hook_index_subnet4_select_(-1), hook_index_pkt4_send_(-1) {
 
     LOG_DEBUG(dhcp4_logger, DBG_DHCP4_START, DHCP4_OPEN_SOCKET).arg(port);
     try {
-        // Open sockets only if port is non-zero. Port 0 is used for testing
-        // purposes in two cases:
-        // - when non-socket related testing is performed
-        // - when the particular test supplies its own packet filtering class.
+        // Port 0 is used for testing purposes where we don't open broadcast
+        // capable sockets. So, set the packet filter handling direct traffic
+        // only if we are in non-test mode.
         if (port) {
             // First call to instance() will create IfaceMgr (it's a singleton)
             // it may throw something if things go wrong.
@@ -103,20 +102,7 @@ Dhcpv4Srv::Dhcpv4Srv(uint16_t port, const char* dbconfig, const bool use_bcast,
             // may be lacking on some OSes, so there is no guarantee that server
             // will be able to respond directly.
             IfaceMgr::instance().setMatchingPacketFilter(direct_response_desired);
-
-            // Create error handler. This handler will be called every time
-            // the socket opening operation fails. We use this handler to
-            // log a warning.
-            isc::dhcp::IfaceMgrErrorMsgCallback error_handler =
-                boost::bind(&Dhcpv4Srv::ifaceMgrSocket4ErrorHandler, _1);
-            IfaceMgr::instance().openSockets4(port_, use_bcast_, error_handler);
         }
-
-        // Instantiate LeaseMgr
-        LeaseMgrFactory::create(dbconfig);
-        LOG_INFO(dhcp4_logger, DHCP4_DB_BACKEND_STARTED)
-            .arg(LeaseMgrFactory::instance().getType())
-            .arg(LeaseMgrFactory::instance().getName());
 
         // Instantiate allocation engine
         alloc_engine_.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE, 100,
@@ -182,9 +168,30 @@ Dhcpv4Srv::run() {
             if (!query) {
                 query = receivePacket(timeout);
             }
+            query = receivePacket(timeout);
+
+        } catch (const SignalInterruptOnSelect) {
+            // Packet reception interrupted because a signal has been received.
+            // This is not an error because we might have received a SIGTERM,
+            // SIGINT or SIGHUP which are handled by the server. For signals
+            // that are not handled by the server we rely on the default
+            // behavior of the system, but there is nothing we should log here.
         } catch (const std::exception& e) {
+            // Log all other errors.
             LOG_ERROR(dhcp4_logger, DHCP4_PACKET_RECEIVE_FAIL).arg(e.what());
         }
+
+        // Handle next signal received by the process. It must be called after
+        // an attempt to receive a packet to properly handle server shut down.
+        // The SIGTERM or SIGINT will be received prior to, or during execution
+        // of select() (select is invoked by recivePacket()). When that happens,
+        // select will be interrupted. The signal handler will be invoked
+        // immediately after select(). The handler will set the shutdown flag
+        // and cause the process to terminate before the next select() function
+        // is called. If the function was called before receivePacket the
+        // process could wait up to the duration of timeout of select() to
+        // terminate.
+        handleSignal();
 
         // Timeout may be reached or signal received, which breaks select()
         // with no reception ocurred
@@ -312,7 +319,7 @@ Dhcpv4Srv::run() {
                 break;
 
             case DHCPINFORM:
-                processInform(query);
+                rsp = processInform(query);
                 break;
 
             default:
@@ -323,13 +330,12 @@ Dhcpv4Srv::run() {
             }
         } catch (const isc::Exception& e) {
 
-            // Catch-all exception (at least for ones based on the isc
-            // Exception class, which covers more or less all that
-            // are explicitly raised in the BIND 10 code).  Just log
-            // the problem and ignore the packet. (The problem is logged
-            // as a debug message because debug is disabled by default -
-            // it prevents a DDOS attack based on the sending of problem
-            // packets.)
+            // Catch-all exception (at least for ones based on the isc Exception
+            // class, which covers more or less all that are explicitly raised
+            // in the Kea code).  Just log the problem and ignore the packet.
+            // (The problem is logged as a debug message because debug is
+            // disabled by default - it prevents a DDOS attack based on the
+            // sending of problem packets.)
             if (dhcp4_logger.isDebugEnabled(DBG_DHCP4_BASIC)) {
                 std::string source = "unknown";
                 HWAddrPtr hwptr = query->getHWAddr();
@@ -962,9 +968,23 @@ Dhcpv4Srv::assignLease(const Pkt4Ptr& question, Pkt4Ptr& answer) {
     if (opt) {
         client_id = ClientIdPtr(new ClientId(opt->getData()));
     }
+
     // client-id is not mandatory in DHCPv4
 
-    IOAddress hint = question->getYiaddr();
+    // Get the server identifier. It will be used to determine the state
+    // of the client.
+    OptionCustomPtr opt_serverid = boost::dynamic_pointer_cast<
+        OptionCustom>(question->getOption(DHO_DHCP_SERVER_IDENTIFIER));
+
+    // Try to get the Requested IP Address option and use the address as a hint
+    // for the allocation engine. If the server doesn't already have a lease
+    // for this client it will try to allocate the one requested.
+    OptionCustomPtr opt_requested_address = boost::dynamic_pointer_cast<
+        OptionCustom>(question->getOption(DHO_DHCP_REQUESTED_ADDRESS));
+    IOAddress hint("0.0.0.0");
+    if (opt_requested_address) {
+        hint = opt_requested_address->readAddress();
+    }
 
     HWAddrPtr hwaddr = question->getHWAddr();
 
@@ -975,6 +995,25 @@ Dhcpv4Srv::assignLease(const Pkt4Ptr& question, Pkt4Ptr& answer) {
     // it should include this hint. That will help us during the actual lease
     // allocation.
     bool fake_allocation = (question->getType() == DHCPDISCOVER);
+
+    // If there is no server id and there is a Requested IP Address option
+    // the client is in the INIT-REBOOT state in which the server has to
+    // determine whether the client's notion of the address has to be verified.
+    if (!fake_allocation && !opt_serverid && opt_requested_address) {
+        Lease4Ptr lease = LeaseMgrFactory::instance().getLease4(hint);
+        if (!lease) {
+            LOG_DEBUG(dhcp4_logger, DBG_DHCP4_DETAIL,
+                      DHCP4_INVALID_ADDRESS_INIT_REBOOT)
+                .arg(hint.toText())
+                .arg(client_id ? client_id->toText():"(no client-id)")
+                .arg(hwaddr ? hwaddr->toText():"(no hwaddr info)");
+
+            answer->setType(DHCPNAK);
+            answer->setYiaddr(IOAddress("0.0.0.0"));
+            return;
+        }
+    }
+
 
     CalloutHandlePtr callout_handle = getCalloutHandle(question);
 
@@ -1015,8 +1054,8 @@ Dhcpv4Srv::assignLease(const Pkt4Ptr& question, Pkt4Ptr& answer) {
     /// @todo pass the actual FQDN data.
     Lease4Ptr old_lease;
     Lease4Ptr lease = alloc_engine_->allocateLease4(subnet, client_id, hwaddr,
-                                                      hint, fqdn_fwd, fqdn_rev,
-                                                      hostname,
+                                                    hint, fqdn_fwd, fqdn_rev,
+                                                    hostname,
                                                     fake_allocation,
                                                     callout_handle,
                                                     old_lease);
@@ -1064,15 +1103,28 @@ Dhcpv4Srv::assignLease(const Pkt4Ptr& question, Pkt4Ptr& answer) {
         }
 
         // IP Address Lease time (type 51)
-        opt = OptionPtr(new Option(Option::V4, DHO_DHCP_LEASE_TIME));
-        opt->setUint32(lease->valid_lft_);
+        opt.reset(new OptionUint32(Option::V4, DHO_DHCP_LEASE_TIME,
+                                   lease->valid_lft_));
         answer->addOption(opt);
 
         // Subnet mask (type 1)
         answer->addOption(getNetmaskOption(subnet));
 
-        /// @todo: send renew timer option (T1, option 58)
-        /// @todo: send rebind timer option (T2, option 59)
+        // renewal-timer (type 58)
+        if (!subnet->getT1().unspecified()) {
+            OptionUint32Ptr t1(new OptionUint32(Option::V4,
+                                                DHO_DHCP_RENEWAL_TIME,
+                                                subnet->getT1()));
+            answer->addOption(t1);
+        }
+
+        // rebind timer (type 59)
+        if (!subnet->getT2().unspecified()) {
+            OptionUint32Ptr t2(new OptionUint32(Option::V4,
+                                                DHO_DHCP_REBINDING_TIME,
+                                                subnet->getT2()));
+            answer->addOption(t2);
+        }
 
         // Create NameChangeRequests if DDNS is enabled and this is a
         // real allocation.
@@ -1142,8 +1194,48 @@ Dhcpv4Srv::adjustRemoteAddr(const Pkt4Ptr& question, const Pkt4Ptr& response) {
     static const IOAddress zero_addr("0.0.0.0");
     static const IOAddress bcast_addr("255.255.255.255");
 
+    // The DHCPINFORM is slightly different than other messages in a sense
+    // that the server should always unicast the response to the ciaddr.
+    // It appears however that some clients don't set the ciaddr. We still
+    // want to provision these clients and we do what we can't to send the
+    // packet to the address where client can receive it.
+    if (question->getType() == DHCPINFORM) {
+        // If client adheres to RFC2131 it will set the ciaddr and in this
+        // case we always unicast our response to this address.
+        if (question->getCiaddr() != zero_addr) {
+            response->setRemoteAddr(question->getCiaddr());
+
+        // If we received DHCPINFOM via relay and the ciaddr is not set we
+        // will try to send the response via relay. The caveat is that the
+        // relay will not have any idea where to forward the packet because
+        // the yiaddr is likely not set. So, the broadcast flag is set so
+        // as the response may be broadcast.
+        } else if (question->isRelayed()) {
+            response->setRemoteAddr(question->getGiaddr());
+            response->setFlags(response->getFlags() | BOOTP_BROADCAST);
+
+        // If there is no ciaddr and no giaddr the only thing we can do is
+        // to use the source address of the packet.
+        } else {
+            response->setRemoteAddr(question->getRemoteAddr());
+        }
+        // Remote addres is now set so return.
+        return;
+    }
+
     // If received relayed message, server responds to the relay address.
     if (question->isRelayed()) {
+        // The client should set the ciaddr when sending the DHCPINFORM
+        // but in case he didn't, the relay may not be able to determine the
+        // address of the client, because yiaddr is not set when responding
+        // to Confirm and the only address available was the source address
+        // of the client. The source address is however not used here because
+        // the message is relayed. Therefore, we set the BROADCAST flag so
+        // as the relay can broadcast the packet.
+        if ((question->getType() == DHCPINFORM) &&
+            (question->getCiaddr() == zero_addr)) {
+            response->setFlags(BOOTP_BROADCAST);
+        }
         response->setRemoteAddr(question->getGiaddr());
 
     // If giaddr is 0 but client set ciaddr, server should unicast the
@@ -1394,9 +1486,30 @@ Dhcpv4Srv::processDecline(Pkt4Ptr& /* decline */) {
 
 Pkt4Ptr
 Dhcpv4Srv::processInform(Pkt4Ptr& inform) {
+    // DHCPINFORM MUST not include server identifier.
+    sanityCheck(inform, FORBIDDEN);
 
-    /// @todo Implement this for real. (also see ticket #3116)
-    return (inform);
+    Pkt4Ptr ack = Pkt4Ptr(new Pkt4(DHCPACK, inform->getTransid()));
+    copyDefaultFields(inform, ack);
+    appendRequestedOptions(inform, ack);
+    appendRequestedVendorOptions(inform, ack);
+    appendBasicOptions(inform, ack);
+    adjustIfaceData(inform, ack);
+
+    // There are cases for the DHCPINFORM that the server receives it via
+    // relay but will send the response to the client's unicast address
+    // carried in the ciaddr. In this case, the giaddr and hops field should
+    // be cleared (these fields were copied by the copyDefaultFields function).
+    // Also Relay Agent Options should be removed if present.
+    if (ack->getRemoteAddr() != inform->getGiaddr()) {
+        ack->setHops(0);
+        ack->setGiaddr(IOAddress("0.0.0.0"));
+        ack->delOption(DHO_DHCP_AGENT_OPTIONS);
+    }
+
+    // The DHCPACK must contain server id.
+    appendServerID(ack);
+    return (ack);
 }
 
 const char*
@@ -1458,6 +1571,15 @@ Dhcpv4Srv::selectSubnet(const Pkt4Ptr& question) const {
         subnet = CfgMgr::instance().getSubnet4(question->getCiaddr(),
                                                question->classes_);
 
+    // Either renewing client or the client that sends DHCPINFORM
+    // must set the ciaddr. But apparently some clients don't do it,
+    // so if the client didn't include ciaddr we will use the source
+    // address.
+    } else if ((question->getLocalAddr() != bcast) &&
+               (question->getRemoteAddr() != notset)) {
+        subnet = CfgMgr::instance().getSubnet4(question->getRemoteAddr(),
+                                               question->classes_);
+
     // The message has been received from a directly connected client
     // and this client appears to have no address. The IPv4 address
     // assigned to the interface on which this message has been received,
@@ -1502,6 +1624,11 @@ Dhcpv4Srv::selectSubnet(const Pkt4Ptr& question) const {
 
 bool
 Dhcpv4Srv::accept(const Pkt4Ptr& query) const {
+    // Check that the message type is accepted by the server. We rely on the
+    // function called to log a message if needed.
+    if (!acceptMessageType(query)) {
+        return (false);
+    }
     // Check if the message from directly connected client (if directly
     // connected) should be dropped or processed.
     if (!acceptDirectRequest(query)) {
@@ -1520,12 +1647,6 @@ Dhcpv4Srv::accept(const Pkt4Ptr& query) const {
         return (false);
     }
 
-    // Check that the message type is accepted by the server. We rely on the
-    // function called to log a message if needed.
-    if (!acceptMessageType(query)) {
-        return (false);
-    }
-
     return (true);
 }
 
@@ -1536,6 +1657,23 @@ Dhcpv4Srv::acceptDirectRequest(const Pkt4Ptr& pkt) const {
             return (true);
         }
     } catch (const Exception& ex) {
+        return (false);
+    }
+    // The source address must not be zero for the DHCPINFORM message from
+    // the directly connected client because the server will not know where
+    // to respond if the ciaddr was not present.
+    static const IOAddress zero_addr("0.0.0.0");
+    try {
+        if (pkt->getType() == DHCPINFORM) {
+            if ((pkt->getRemoteAddr() == zero_addr) &&
+                (pkt->getCiaddr() == zero_addr)) {
+                return (false);
+            }
+        }
+    } catch (...) {
+        // If we got here, it is probably because the message type hasn't
+        // been set. But, this should not really happen assuming that
+        // we validate the message type prior to calling this function.
         return (false);
     }
     static const IOAddress bcast("255.255.255.255");
@@ -1675,51 +1813,6 @@ Dhcpv4Srv::sanityCheck(const Pkt4Ptr& pkt, RequirementLevel serverid) {
         isc_throw(RFCViolation, "Missing or useless client-id and no HW address "
                   " provided in message "
                   << serverReceivedPacketName(pkt->getType()));
-    }
-}
-
-void
-Dhcpv4Srv::openActiveSockets(const uint16_t port,
-                             const bool use_bcast) {
-    IfaceMgr::instance().closeSockets();
-
-    // Get the reference to the collection of interfaces. This reference should
-    // be valid as long as the program is run because IfaceMgr is a singleton.
-    // Therefore we can safely iterate over instances of all interfaces and
-    // modify their flags. Here we modify flags which indicate whether socket
-    // should be open for a particular interface or not.
-    const IfaceMgr::IfaceCollection& ifaces = IfaceMgr::instance().getIfaces();
-    for (IfaceMgr::IfaceCollection::const_iterator iface = ifaces.begin();
-         iface != ifaces.end(); ++iface) {
-        Iface* iface_ptr = IfaceMgr::instance().getIface(iface->getName());
-        if (iface_ptr == NULL) {
-            isc_throw(isc::Unexpected, "Interface Manager returned NULL"
-                      << " instance of the interface when DHCPv4 server was"
-                      << " trying to reopen sockets after reconfiguration");
-        }
-        if (CfgMgr::instance().isActiveIface(iface->getName())) {
-            iface_ptr->inactive4_ = false;
-            LOG_INFO(dhcp4_logger, DHCP4_ACTIVATE_INTERFACE)
-                .arg(iface->getFullName());
-
-        } else {
-            // For deactivating interface, it should be sufficient to log it
-            // on the debug level because it is more useful to know what
-            // interface is activated which is logged on the info level.
-            LOG_DEBUG(dhcp4_logger, DBG_DHCP4_BASIC,
-                      DHCP4_DEACTIVATE_INTERFACE).arg(iface->getName());
-            iface_ptr->inactive4_ = true;
-
-        }
-    }
-    // Let's reopen active sockets. openSockets4 will check internally whether
-    // sockets are marked active or inactive.
-    /// @todo Optimization: we should not reopen all sockets but rather select
-    /// those that have been affected by the new configuration.
-    isc::dhcp::IfaceMgrErrorMsgCallback error_handler =
-        boost::bind(&Dhcpv4Srv::ifaceMgrSocket4ErrorHandler, _1);
-    if (!IfaceMgr::instance().openSockets4(port, use_bcast, error_handler)) {
-        LOG_WARN(dhcp4_logger, DHCP4_NO_SOCKETS_OPEN);
     }
 }
 
@@ -1917,7 +2010,7 @@ Dhcpv4Srv::d2ClientErrorHandler(const
                                 dhcp_ddns::NameChangeRequestPtr& ncr) {
     LOG_ERROR(dhcp4_logger, DHCP4_DDNS_REQUEST_SEND_FAILED).
               arg(result).arg((ncr ? ncr->toText() : " NULL "));
-    // We cannot communicate with b10-dhcp-ddns, suspend futher updates.
+    // We cannot communicate with kea-dhcp-ddns, suspend futher updates.
     /// @todo We may wish to revisit this, but for now we will simpy turn
     /// them off.
     CfgMgr::instance().getD2ClientMgr().suspendUpdates();
@@ -1925,7 +2018,6 @@ Dhcpv4Srv::d2ClientErrorHandler(const
 
 void
 Dhcpv4Srv::enable4o6() {
-    puts("dhcp4 enable 4o6!!!");
     /// init DHCP4o6 IPC
     try {
         ipc_ = DHCP4o6IPCPtr(new DHCP4o6IPC("DHCPv4_over_DHCPv6_v6tov4",
@@ -1942,11 +2034,25 @@ Dhcpv4Srv::enable4o6() {
 
 void
 Dhcpv4Srv::disable4o6() {
-    puts("dhcp4 disable 4o6!!!");
     if (!ipc_)
         return;
     IfaceMgr::instance().deleteExternalSocket(ipc_->getSocket());
     ipc_ = boost::shared_ptr<DHCP4o6IPC>();
+
+std::string
+Daemon::getVersion(bool extended) {
+    std::stringstream tmp;
+
+    tmp << VERSION;
+    if (extended) {
+        tmp << endl << EXTENDED_VERSION;
+
+        // @todo print more details (is it Botan or OpenSSL build,
+        // with or without MySQL/Postgres? What compilation options were
+        // used? etc)
+    }
+
+    return (tmp.str());
 }
 
 }   // namespace dhcp

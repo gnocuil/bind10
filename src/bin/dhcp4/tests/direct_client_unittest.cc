@@ -19,7 +19,7 @@
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcpsrv/subnet.h>
-#include <dhcp4/config_parser.h>
+#include <dhcp4/json_config_parser.h>
 #include <dhcp4/tests/dhcp4_test_utils.h>
 #include <gtest/gtest.h>
 #include <string>
@@ -120,7 +120,7 @@ DirectClientTest::configureSubnet(const std::string& prefix) {
         "\"renew-timer\": 1000, "
         "\"option-data\": [ ],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"" << prefix << "/24\" ],"
+        "    \"pools\": [ { \"pool\": \"" << prefix << "/24\" } ],"
         "    \"subnet\": \"" << prefix << "/24\", "
         "    \"rebind-timer\": 2000, "
         "    \"renew-timer\": 1000, "
@@ -141,14 +141,14 @@ DirectClientTest::configureTwoSubnets(const std::string& prefix1,
         "\"renew-timer\": 1000, "
         "\"option-data\": [ ],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"" << prefix1 << "/24\" ],"
+        "    \"pools\": [ { \"pool\": \"" << prefix1 << "/24\" } ],"
         "    \"subnet\": \"" << prefix1 << "/24\", "
         "    \"rebind-timer\": 2000, "
         "    \"renew-timer\": 1000, "
         "    \"valid-lifetime\": 4000"
         " },"
         "{ "
-        "    \"pool\": [ \"" << prefix2 << "/24\" ],"
+        "    \"pools\": [ { \"pool\": \"" << prefix2 << "/24\" } ],"
         "    \"subnet\": \"" << prefix2 << "/24\", "
         "    \"rebind-timer\": 2000, "
         "    \"renew-timer\": 1000, "

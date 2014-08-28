@@ -1,0 +1,94 @@
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+               "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"
+	       [<!ENTITY mdash "&#8212;">]>
+<!--
+ - Copyright (C) 2012, 2014 Internet Systems Consortium, Inc. ("ISC")
+ -
+ - Permission to use, copy, modify, and/or distribute this software for any
+ - purpose with or without fee is hereby granted, provided that the above
+ - copyright notice and this permission notice appear in all copies.
+ -
+ - THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
+ - REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+ - AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
+ - INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+ - LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+ - OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+ - PERFORMANCE OF THIS SOFTWARE.
+-->
+
+<refentry>
+
+  <refentryinfo>
+    <date>July 1, 2014</date>
+  </refentryinfo>
+
+  <refmeta>
+    <refentrytitle>kea-sockcreator</refentrytitle>
+    <manvolnum>8</manvolnum>
+    <refmiscinfo>Kea</refmiscinfo>
+  </refmeta>
+
+  <refnamediv>
+    <refname>kea-sockcreator</refname>
+    <refpurpose>socket creation daemon</refpurpose>
+  </refnamediv>
+
+  <docinfo>
+    <copyright>
+      <year>2014</year>
+      <holder>Internet Systems Consortium, Inc. ("ISC")</holder>
+    </copyright>
+  </docinfo>
+
+  <refsynopsisdiv>
+    <cmdsynopsis>
+      <command>kea-sockcreator</command>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+
+  <refsect1>
+    <title>DESCRIPTION</title>
+    <para>
+      The <command>kea-sockcreator</command> daemon's entire job
+      is to create sockets and assign names to them.
+    </para>
+
+<!-- TODO: integrate README here -->
+
+    <para>
+      The <command>kea-sockcreator</command> daemon will exit
+      if there is an unrecoverable error or unknown command.
+    </para>
+
+  </refsect1>
+
+  <refsect1>
+    <title>SEE ALSO</title>
+    <para>
+      <citetitle>Kea Guide</citetitle>.
+    </para>
+<!-- TODO: point to developer docs -->
+  </refsect1>
+
+  <refsect1>
+    <title>HISTORY</title>
+    <para>
+      The <command>b10-sockcreator</command> daemon
+      was initially designed by Michal Vaner of CZNIC.
+    </para>
+    <para>
+      Kea became a standalone server and the BIND10 framework was
+      removed. The socket creator server binary was renamed to
+      kea-sockcreator in July 2014.
+    </para>
+  </refsect1>
+
+</refentry><!--
+ - Local variables:
+ - mode: sgml
+ - End:
+-->
+
+
+

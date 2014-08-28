@@ -27,6 +27,7 @@
 #include <dhcp/pkt_filter_inet.h>
 #include <dhcpsrv/subnet.h>
 #include <dhcpsrv/lease.h>
+#include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcp4/dhcp4_srv.h>
 #include <asiolink/io_address.h>
 #include <config/ccsession.h>
@@ -63,7 +64,7 @@ public:
     }
 
     /// Does nothing.
-    virtual SocketInfo openSocket(const Iface&,
+    virtual SocketInfo openSocket(Iface&,
                                   const isc::asiolink::IOAddress& addr,
                                   const uint16_t port, const bool, const bool) {
         return (SocketInfo(addr, port, 0));
@@ -117,8 +118,10 @@ public:
     /// @param port port number to listen on; the default value 0 indicates
     /// that sockets should not be opened.
     NakedDhcpv4Srv(uint16_t port = 0)
-        : Dhcpv4Srv(port, "type=memfile universe=4 persist=false",
-                    false, false) {
+        : Dhcpv4Srv(port, false, false) {
+        // Create a default lease database backend.
+        std::string dbconfig = "type=memfile universe=4 persist=false";
+        isc::dhcp::LeaseMgrFactory::create(dbconfig);
         // Create fixed server id.
         server_id_.reset(new Option4AddrLst(DHO_DHCP_SERVER_IDENTIFIER,
                                             asiolink::IOAddress("192.0.3.1")));
@@ -201,6 +204,7 @@ public:
     using Dhcpv4Srv::acceptMessageType;
     using Dhcpv4Srv::selectSubnet;
     using Dhcpv4Srv::VENDOR_CLASS_PREFIX;
+    using Dhcpv4Srv::shutdown_;
 };
 
 class Dhcpv4SrvTest : public ::testing::Test {
@@ -290,11 +294,13 @@ public:
     /// @param rsp response to be checked
     /// @param subnet subnet that should be used to verify assigned address
     ///        and options
-    /// @param t1_mandatory is T1 mandatory?
-    /// @param t2_mandatory is T2 mandatory?
+    /// @param t1_present check that t1 must be present (true) or must not be
+    /// present (false)
+    /// @param t2_present check that t2 must be present (true) or must not be
+    /// present (false)
     void checkAddressParams(const Pkt4Ptr& rsp, const SubnetPtr subnet,
-                            bool t1_mandatory = false,
-                            bool t2_mandatory = false);
+                            bool t1_present = false,
+                            bool t2_present = false);
 
     /// @brief Basic checks for generated response (message type and trans-id).
     ///
@@ -400,6 +406,12 @@ public:
     ///
     /// @param config String holding server configuration in JSON format.
     void configure(const std::string& config);
+
+    /// @brief Configure specified DHCP server using JSON string.
+    ///
+    /// @param config String holding server configuration in JSON format.
+    /// @param srv Instance of the server to be configured.
+    void configure(const std::string& config, NakedDhcpv4Srv& srv);
 
     /// @brief This function cleans up after the test.
     virtual void TearDown();

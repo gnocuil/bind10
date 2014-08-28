@@ -41,22 +41,22 @@ const int NameChangeTransaction::UPDATE_FAILED_EVT;
 
 const int NameChangeTransaction::NCT_DERIVED_EVENT_MIN;
 
-const unsigned int NameChangeTransaction::DNS_UPDATE_DEFAULT_TIMEOUT;
 const unsigned int NameChangeTransaction::MAX_UPDATE_TRIES_PER_SERVER;
 
 NameChangeTransaction::
 NameChangeTransaction(IOServicePtr& io_service,
                       dhcp_ddns::NameChangeRequestPtr& ncr,
                       DdnsDomainPtr& forward_domain,
-                      DdnsDomainPtr& reverse_domain)
+                      DdnsDomainPtr& reverse_domain,
+                      D2CfgMgrPtr& cfg_mgr)
     : io_service_(io_service), ncr_(ncr), forward_domain_(forward_domain),
      reverse_domain_(reverse_domain), dns_client_(), dns_update_request_(),
      dns_update_status_(DNSClient::OTHER), dns_update_response_(),
      forward_change_completed_(false), reverse_change_completed_(false),
      current_server_list_(), current_server_(), next_server_pos_(0),
-     update_attempts_(0) {
-    // @todo if io_service is NULL we are multi-threading and should
-    // instantiate our own
+     update_attempts_(0), cfg_mgr_(cfg_mgr), tsig_key_() {
+    /// @todo if io_service is NULL we are multi-threading and should
+    /// instantiate our own
     if (!io_service_) {
         isc_throw(NameChangeTransactionError, "IOServicePtr cannot be null");
     }
@@ -74,6 +74,11 @@ NameChangeTransaction(IOServicePtr& io_service,
     if (ncr_->isReverseChange() && !(reverse_domain_)) {
         isc_throw(NameChangeTransactionError,
                  "Reverse change must have a reverse domain");
+    }
+
+    if (!cfg_mgr_) {
+        isc_throw(NameChangeTransactionError,
+                  "Configuration manager cannot be null");
     }
 }
 
@@ -163,20 +168,17 @@ NameChangeTransaction::transactionOutcomeString() const {
 
 
 void
-NameChangeTransaction::sendUpdate(const std::string& comment,
-                                  bool /* use_tsig_ */) {
+NameChangeTransaction::sendUpdate(const std::string& comment) {
     try {
         ++update_attempts_;
         // @todo add logic to add/replace TSIG key info in request if
         // use_tsig_ is true. We should be able to navigate to the TSIG key
         // for the current server.  If not we would need to add that.
 
-        // @todo time out should ultimately be configurable, down to
-        // server level?
+        D2ParamsPtr d2_params = cfg_mgr_->getD2Params();
         dns_client_->doUpdate(*io_service_, current_server_->getIpAddress(),
                               current_server_->getPort(), *dns_update_request_,
-                              DNS_UPDATE_DEFAULT_TIMEOUT);
-
+                              d2_params->getDnsServerTimeout(), tsig_key_);
         // Message is on its way, so the next event should be NOP_EVT.
         postNextEvent(NOP_EVT);
         LOG_DEBUG(dctl_logger, DBGLVL_TRACE_DETAIL,
@@ -420,6 +422,15 @@ NameChangeTransaction::initServerSelection(const DdnsDomainPtr& domain) {
         isc_throw(NameChangeTransactionError,
                   "initServerSelection called with an empty domain");
     }
+
+    // Set the tsig_key to that of the DdnsDomain.
+    TSIGKeyInfoPtr tsig_key_info = domain->getTSIGKeyInfo();
+    if (tsig_key_info) {
+        tsig_key_ = tsig_key_info->getTSIGKey();
+    } else {
+        tsig_key_.reset();
+    }
+
     current_server_list_ = domain->getServers();
     next_server_pos_ = 0;
     current_server_.reset();

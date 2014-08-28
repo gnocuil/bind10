@@ -32,7 +32,7 @@
 #include <dhcp/tests/iface_mgr_test_config.h>
 #include <dhcp4/dhcp4_srv.h>
 #include <dhcp4/dhcp4_log.h>
-#include <dhcp4/config_parser.h>
+#include <dhcp4/json_config_parser.h>
 #include <hooks/server_hooks.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/lease_mgr.h>
@@ -401,8 +401,8 @@ TEST_F(Dhcpv4SrvTest, basic) {
 
     // Check that the base class can be instantiated
     boost::scoped_ptr<Dhcpv4Srv> srv;
-    ASSERT_NO_THROW(srv.reset(new Dhcpv4Srv(DHCP4_SERVER_PORT + 10000, "type=memfile",
-                                            false, false)));
+    ASSERT_NO_THROW(srv.reset(new Dhcpv4Srv(DHCP4_SERVER_PORT + 10000, false,
+                                            false)));
     srv.reset();
     // We have to close open sockets because further in this test we will
     // call the Dhcpv4Srv constructor again. This constructor will try to
@@ -418,26 +418,6 @@ TEST_F(Dhcpv4SrvTest, basic) {
     IfaceMgr::instance().closeSockets();
 
     ASSERT_NO_THROW(naked_srv.reset(new NakedDhcpv4Srv(0)));
-}
-
-// This test verifies that exception is not thrown when an error occurs during
-// opening sockets. This test forces an error by adding a fictious interface
-// to the IfaceMgr. An attempt to open socket on this interface must always
-// fail. The DHCPv4 installs the error handler function to prevent exceptions
-// being thrown from the openSockets4 function.
-// @todo The server tests for socket should be extended but currently the
-// ability to unit test the sockets code is somewhat limited.
-TEST_F(Dhcpv4SrvTest, openActiveSockets) {
-    ASSERT_NO_THROW(CfgMgr::instance().activateAllIfaces());
-
-    Iface iface("bogusiface", 255);
-    iface.flag_loopback_ = false;
-    iface.flag_up_ = true;
-    iface.flag_running_ = true;
-    iface.inactive4_ = false;
-    iface.addAddress(IOAddress("192.0.0.0"));
-    IfaceMgr::instance().addInterface(iface);
-    ASSERT_NO_THROW(Dhcpv4Srv::openActiveSockets(DHCP4_SERVER_PORT, false));
 }
 
 // Verifies that DISCOVER message can be processed correctly,
@@ -478,20 +458,6 @@ TEST_F(Dhcpv4SrvTest, processDecline) {
 
     // Should not throw
     EXPECT_NO_THROW(srv.processDecline(pkt));
-}
-
-TEST_F(Dhcpv4SrvTest, processInform) {
-    NakedDhcpv4Srv srv;
-    Pkt4Ptr pkt(new Pkt4(DHCPINFORM, 1234));
-
-    // Should not throw
-    EXPECT_NO_THROW(srv.processInform(pkt));
-
-    // Should return something
-    EXPECT_TRUE(srv.processInform(pkt));
-
-    // @todo Implement more reasonable tests before starting
-    // work on processSomething() method.
 }
 
 TEST_F(Dhcpv4SrvTest, serverReceivedPacketName) {
@@ -558,40 +524,37 @@ TEST_F(Dhcpv4SrvTest, DiscoverBasic) {
 
     // Check that address was returned from proper range, that its lease
     // lifetime is correct, that T1 and T2 are returned properly
-    checkAddressParams(offer, subnet_);
+    checkAddressParams(offer, subnet_, true, true);
 
     // Check identifiers
     checkServerId(offer, srv->getServerID());
     checkClientId(offer, clientid);
 }
 
-
-// This test verifies that incoming DISCOVER can be handled properly, that an
-// OFFER is generated, that the response has an address and that address
-// really belongs to the configured pool.
-//
-// constructed very simple DISCOVER message with:
-// - client-id option
-// - address set to specific value as hint
-//
-// expected returned OFFER message:
-// - copy of client-id
-// - server-id
-// - offered address
-TEST_F(Dhcpv4SrvTest, DiscoverHint) {
+// Check that option 58 and 59 are not included if they are not specified.
+TEST_F(Dhcpv4SrvTest, DiscoverNoTimers) {
     IfaceMgrTestConfig test_config(true);
     IfaceMgr::instance().openSockets4();
 
     boost::scoped_ptr<NakedDhcpv4Srv> srv;
     ASSERT_NO_THROW(srv.reset(new NakedDhcpv4Srv(0)));
-    IOAddress hint("192.0.2.107");
 
     Pkt4Ptr dis = Pkt4Ptr(new Pkt4(DHCPDISCOVER, 1234));
     dis->setRemoteAddr(IOAddress("192.0.2.1"));
     OptionPtr clientid = generateClientId();
     dis->addOption(clientid);
-    dis->setYiaddr(hint);
     dis->setIface("eth1");
+
+    // Recreate a subnet but set T1 and T2 to "unspecified".
+    subnet_.reset(new Subnet4(IOAddress("192.0.2.0"), 24,
+                              Triplet<uint32_t>(),
+                              Triplet<uint32_t>(),
+                              3000));
+    pool_ = Pool4Ptr(new Pool4(IOAddress("192.0.2.100"),
+                               IOAddress("192.0.2.110")));
+    subnet_->addPool(pool_);
+    CfgMgr::instance().deleteSubnets4();
+    CfgMgr::instance().addSubnet4(subnet_);
 
     // Pass it to the server and get an offer
     Pkt4Ptr offer = srv->processDiscover(dis);
@@ -599,57 +562,12 @@ TEST_F(Dhcpv4SrvTest, DiscoverHint) {
     // Check if we get response at all
     checkResponse(offer, DHCPOFFER, 1234);
 
-    // Check that address was returned from proper range, that its lease
-    // lifetime is correct, that T1 and T2 are returned properly
-    checkAddressParams(offer, subnet_);
-
-    EXPECT_EQ(offer->getYiaddr(), hint);
+    // T1 and T2 timers must not be present.
+    checkAddressParams(offer, subnet_, false, false);
 
     // Check identifiers
     checkServerId(offer, srv->getServerID());
     checkClientId(offer, clientid);
-}
-
-
-// This test verifies that incoming DISCOVER can be handled properly, that an
-// OFFER is generated, that the response has an address and that address
-// really belongs to the configured pool.
-//
-// constructed very simple DISCOVER message with:
-// - address set to specific value as hint
-//
-// expected returned OFFER message:
-// - copy of client-id
-// - server-id
-// - offered address
-TEST_F(Dhcpv4SrvTest, DiscoverNoClientId) {
-    IfaceMgrTestConfig test_config(true);
-    IfaceMgr::instance().openSockets4();
-
-    boost::scoped_ptr<NakedDhcpv4Srv> srv;
-    ASSERT_NO_THROW(srv.reset(new NakedDhcpv4Srv(0)));
-    IOAddress hint("192.0.2.107");
-
-    Pkt4Ptr dis = Pkt4Ptr(new Pkt4(DHCPDISCOVER, 1234));
-    dis->setRemoteAddr(IOAddress("192.0.2.1"));
-    dis->setYiaddr(hint);
-    dis->setHWAddr(generateHWAddr(6));
-    dis->setIface("eth1");
-
-    // Pass it to the server and get an offer
-    Pkt4Ptr offer = srv->processDiscover(dis);
-
-    // Check if we get response at all
-    checkResponse(offer, DHCPOFFER, 1234);
-
-    // Check that address was returned from proper range, that its lease
-    // lifetime is correct, that T1 and T2 are returned properly
-    checkAddressParams(offer, subnet_);
-
-    EXPECT_EQ(offer->getYiaddr(), hint);
-
-    // Check identifiers
-    checkServerId(offer, srv->getServerID());
 }
 
 // This test verifies that incoming DISCOVER can be handled properly, that an
@@ -687,7 +605,7 @@ TEST_F(Dhcpv4SrvTest, DiscoverInvalidHint) {
 
     // Check that address was returned from proper range, that its lease
     // lifetime is correct, that T1 and T2 are returned properly
-    checkAddressParams(offer, subnet_);
+    checkAddressParams(offer, subnet_, true, true);
 
     EXPECT_NE(offer->getYiaddr(), hint);
 
@@ -750,9 +668,9 @@ TEST_F(Dhcpv4SrvTest, ManyDiscovers) {
     IOAddress addr3 = offer3->getYiaddr();
 
     // Check that the assigned address is indeed from the configured pool
-    checkAddressParams(offer1, subnet_);
-    checkAddressParams(offer2, subnet_);
-    checkAddressParams(offer3, subnet_);
+    checkAddressParams(offer1, subnet_, true, true);
+    checkAddressParams(offer2, subnet_, true, true);
+    checkAddressParams(offer3, subnet_, true, true);
 
     // Check server-ids
     checkServerId(offer1, srv->getServerID());
@@ -801,157 +719,43 @@ TEST_F(Dhcpv4SrvTest, discoverEchoClientId) {
     checkClientId(offer, clientid);
 }
 
-// This test verifies that incoming REQUEST can be handled properly, that an
-// ACK is generated, that the response has an address and that address
-// really belongs to the configured pool.
-//
-// constructed a single REQUEST message with:
-// - client-id option
-// - hwaddr information
-// - requested address (that the client received in DISCOVER/OFFER exchange)
-//
-// expected returned ACK message:
-// - copy of client-id
-// - server-id
-// - assigned address
-//
-// Test verifies that the lease is actually in the database.
-TEST_F(Dhcpv4SrvTest, RequestBasic) {
+// Check that option 58 and 59 are not included if they are not specified.
+TEST_F(Dhcpv4SrvTest, RequestNoTimers) {
     IfaceMgrTestConfig test_config(true);
     IfaceMgr::instance().openSockets4();
 
     boost::scoped_ptr<NakedDhcpv4Srv> srv;
     ASSERT_NO_THROW(srv.reset(new NakedDhcpv4Srv(0)));
 
-    IOAddress hint("192.0.2.107");
     Pkt4Ptr req = Pkt4Ptr(new Pkt4(DHCPREQUEST, 1234));
     req->setRemoteAddr(IOAddress("192.0.2.1"));
     OptionPtr clientid = generateClientId();
     req->addOption(clientid);
-    req->setYiaddr(hint);
     req->setIface("eth1");
 
-    // Pass it to the server and get an advertise
+    // Recreate a subnet but set T1 and T2 to "unspecified".
+    subnet_.reset(new Subnet4(IOAddress("192.0.2.0"), 24,
+                              Triplet<uint32_t>(),
+                              Triplet<uint32_t>(),
+                              3000));
+    pool_ = Pool4Ptr(new Pool4(IOAddress("192.0.2.100"),
+                               IOAddress("192.0.2.110")));
+    subnet_->addPool(pool_);
+    CfgMgr::instance().deleteSubnets4();
+    CfgMgr::instance().addSubnet4(subnet_);
+
+    // Pass it to the server and get an ACK.
     Pkt4Ptr ack = srv->processRequest(req);
 
     // Check if we get response at all
     checkResponse(ack, DHCPACK, 1234);
-    EXPECT_EQ(hint, ack->getYiaddr());
 
-    // Check that address was returned from proper range, that its lease
-    // lifetime is correct, that T1 and T2 are returned properly
-    checkAddressParams(ack, subnet_);
+    // T1 and T2 timers must not be present.
+    checkAddressParams(ack, subnet_, false, false);
 
     // Check identifiers
     checkServerId(ack, srv->getServerID());
     checkClientId(ack, clientid);
-
-    // Check that the lease is really in the database
-    Lease4Ptr l = checkLease(ack, clientid, req->getHWAddr(), hint);
-
-    ASSERT_TRUE(l);
-    LeaseMgrFactory::instance().deleteLease(l->addr_);
-}
-
-// This test verifies that incoming REQUEST can be handled properly, that an
-// ACK is generated, that the response has an address and that address
-// really belongs to the configured pool.
-//
-// constructed 3 REQUEST messages with:
-// - client-id option (differs between messages)
-// - hwaddr information (differs between messages)
-//
-// expected returned ACK message:
-// - copy of client-id
-// - server-id
-// - assigned address (different for each client)
-TEST_F(Dhcpv4SrvTest, ManyRequests) {
-    IfaceMgrTestConfig test_config(true);
-    IfaceMgr::instance().openSockets4();
-
-    boost::scoped_ptr<NakedDhcpv4Srv> srv;
-    ASSERT_NO_THROW(srv.reset(new NakedDhcpv4Srv(0)));
-
-    const IOAddress req_addr1("192.0.2.105");
-    const IOAddress req_addr2("192.0.2.101");
-    const IOAddress req_addr3("192.0.2.109");
-    const IOAddress relay("192.0.2.1");
-
-    Pkt4Ptr req1 = Pkt4Ptr(new Pkt4(DHCPOFFER, 1234));
-    Pkt4Ptr req2 = Pkt4Ptr(new Pkt4(DHCPOFFER, 2345));
-    Pkt4Ptr req3 = Pkt4Ptr(new Pkt4(DHCPOFFER, 3456));
-
-    req1->setRemoteAddr(relay);
-    req2->setRemoteAddr(relay);
-    req3->setRemoteAddr(relay);
-
-    // Assign interfaces
-    req1->setIface("eth1");
-    req2->setIface("eth1");
-    req3->setIface("eth1");
-
-    req1->setYiaddr(req_addr1);
-    req2->setYiaddr(req_addr2);
-    req3->setYiaddr(req_addr3);
-
-    req1->setHWAddr(generateHWAddr(6));
-    req2->setHWAddr(generateHWAddr(7));
-    req3->setHWAddr(generateHWAddr(8));
-
-    // Different client-id sizes
-    OptionPtr clientid1 = generateClientId(4); // length 4
-    OptionPtr clientid2 = generateClientId(5); // length 5
-    OptionPtr clientid3 = generateClientId(6); // length 6
-
-    req1->addOption(clientid1);
-    req2->addOption(clientid2);
-    req3->addOption(clientid3);
-
-    // Pass it to the server and get an advertise
-    Pkt4Ptr ack1 = srv->processRequest(req1);
-    Pkt4Ptr ack2 = srv->processRequest(req2);
-    Pkt4Ptr ack3 = srv->processRequest(req3);
-
-    // Check if we get response at all
-    checkResponse(ack1, DHCPACK, 1234);
-    checkResponse(ack2, DHCPACK, 2345);
-    checkResponse(ack3, DHCPACK, 3456);
-
-    IOAddress addr1 = ack1->getYiaddr();
-    IOAddress addr2 = ack2->getYiaddr();
-    IOAddress addr3 = ack3->getYiaddr();
-
-    // Check that every client received the address it requested
-    EXPECT_EQ(req_addr1, addr1);
-    EXPECT_EQ(req_addr2, addr2);
-    EXPECT_EQ(req_addr3, addr3);
-
-    // Check that the assigned address is indeed from the configured pool
-    checkAddressParams(ack1, subnet_);
-    checkAddressParams(ack2, subnet_);
-    checkAddressParams(ack3, subnet_);
-
-    // Check DUIDs
-    checkServerId(ack1, srv->getServerID());
-    checkServerId(ack2, srv->getServerID());
-    checkServerId(ack3, srv->getServerID());
-    checkClientId(ack1, clientid1);
-    checkClientId(ack2, clientid2);
-    checkClientId(ack3, clientid3);
-
-    // Check that leases are in the database
-    Lease4Ptr l = checkLease(ack1, clientid1, req1->getHWAddr(), addr1);
-    EXPECT_TRUE(l);
-    l = checkLease(ack2, clientid2, req2->getHWAddr(), addr2);
-    l = checkLease(ack3, clientid3, req3->getHWAddr(), addr3);
-
-    // Finally check that the addresses offered are different
-    EXPECT_NE(addr1, addr2);
-    EXPECT_NE(addr2, addr3);
-    EXPECT_NE(addr3, addr1);
-    cout << "Offered address to client1=" << addr1 << endl;
-    cout << "Offered address to client2=" << addr2 << endl;
-    cout << "Offered address to client3=" << addr3 << endl;
 }
 
 // Checks whether echoing back client-id is controllable
@@ -1049,7 +853,7 @@ TEST_F(Dhcpv4SrvTest, RenewBasic) {
 
     // Check that address was returned from proper range, that its lease
     // lifetime is correct, that T1 and T2 are returned properly
-    checkAddressParams(ack, subnet_);
+    checkAddressParams(ack, subnet_, true, true);
 
     // Check identifiers
     checkServerId(ack, srv->getServerID());
@@ -1385,7 +1189,7 @@ TEST_F(Dhcpv4SrvTest, vendorOptionsDocsis) {
         "          \"csv-format\": True"
         "        }],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"10.254.226.0/25\" ],"
+        "    \"pools\": [ { \"pool\": \"10.254.226.0/25\" } ],"
         "    \"subnet\": \"10.254.226.0/24\", "
         "    \"rebind-timer\": 2000, "
         "    \"renew-timer\": 1000, "
@@ -1633,7 +1437,7 @@ TEST_F(Dhcpv4SrvTest, nextServerOverride) {
         "\"renew-timer\": 1000, "
         "\"next-server\": \"192.0.0.1\", "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\":  \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"next-server\": \"1.2.3.4\", "
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         "\"valid-lifetime\": 4000 }";
@@ -1678,7 +1482,7 @@ TEST_F(Dhcpv4SrvTest, nextServerGlobal) {
         "\"renew-timer\": 1000, "
         "\"next-server\": \"192.0.0.1\", "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         "\"valid-lifetime\": 4000 }";
 
@@ -1705,9 +1509,6 @@ TEST_F(Dhcpv4SrvTest, nextServerGlobal) {
     EXPECT_EQ("192.0.0.1", offer->getSiaddr().toText());
 }
 
-
-// a dummy MAC address
-const uint8_t dummyMacAddr[] = {0, 1, 2, 3, 4, 5};
 
 // A dummy MAC address, padded with 0s
 const uint8_t dummyChaddr[16] = {0, 1, 2, 3, 4, 5, 0, 0,
@@ -2673,11 +2474,11 @@ TEST_F(HooksDhcpv4SrvTest, subnet4SelectSimple) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.0/25\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.0/25\" } ],"
         "    \"subnet\": \"192.0.2.0/24\", "
         "    \"interface\": \"eth0\" "
         " }, {"
-        "    \"pool\": [ \"192.0.3.0/25\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.3.0/25\" } ],"
         "    \"subnet\": \"192.0.3.0/24\" "
         " } ],"
         "\"valid-lifetime\": 4000 }";
@@ -2741,11 +2542,11 @@ TEST_F(HooksDhcpv4SrvTest, subnet4SelectChange) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.0/25\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.0/25\" } ],"
         "    \"subnet\": \"192.0.2.0/24\", "
         "    \"interface\": \"eth0\" "
         " }, {"
-        "    \"pool\": [ \"192.0.3.0/25\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.3.0/25\" } ],"
         "    \"subnet\": \"192.0.3.0/24\" "
         " } ],"
         "\"valid-lifetime\": 4000 }";
@@ -3149,7 +2950,7 @@ TEST_F(Dhcpv4SrvTest, vendorOptionsORO) {
     NakedDhcpv4Srv srv(0);
 
     ConstElementPtr x;
-    string config = "{ \"interfaces\": [ \"all\" ],"
+    string config = "{ \"interfaces\": [ \"*\" ],"
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "    \"option-data\": [ {"
@@ -3160,7 +2961,7 @@ TEST_F(Dhcpv4SrvTest, vendorOptionsORO) {
         "          \"csv-format\": True"
         "        }],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.0/25\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.0/25\" } ],"
         "    \"subnet\": \"192.0.2.0/24\", "
         "    \"rebind-timer\": 2000, "
         "    \"renew-timer\": 1000, "
@@ -3234,7 +3035,7 @@ TEST_F(Dhcpv4SrvTest, vendorOptionsORO) {
 // src/lib/dhcp/docsis3_option_defs.h.
 TEST_F(Dhcpv4SrvTest, vendorOptionsDocsisDefinitions) {
     ConstElementPtr x;
-    string config_prefix = "{ \"interfaces\": [ \"all\" ],"
+    string config_prefix = "{ \"interfaces\": [ \"*\" ],"
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "    \"option-data\": [ {"
@@ -3246,7 +3047,7 @@ TEST_F(Dhcpv4SrvTest, vendorOptionsDocsisDefinitions) {
         "          \"csv-format\": True"
         "        }],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.50\" ],"
+        "    \"pools\": [ { \"pool\":  \"192.0.2.1 - 192.0.2.50\" } ],"
         "    \"subnet\": \"192.0.2.0/24\", "
         "    \"renew-timer\": 1000, "
         "    \"rebind-timer\": 1000, "
@@ -3327,10 +3128,10 @@ TEST_F(Dhcpv4SrvTest, clientClassify2) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ "
-        "{   \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "{   \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"client-class\": \"foo\", "
         "    \"subnet\": \"192.0.2.0/24\" }, "
-        "{   \"pool\": [ \"192.0.3.1 - 192.0.3.100\" ],"
+        "{   \"pools\": [ { \"pool\": \"192.0.3.1 - 192.0.3.100\" } ],"
         "    \"client-class\": \"xyzzy\", "
         "    \"subnet\": \"192.0.3.0/24\" } "
         "],"
@@ -3375,12 +3176,12 @@ TEST_F(Dhcpv4SrvTest, relayOverride) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ "
-        "{   \"pool\": [ \"192.0.2.2 - 192.0.2.100\" ],"
+        "{   \"pools\": [ { \"pool\": \"192.0.2.2 - 192.0.2.100\" } ],"
         "    \"relay\": { "
         "        \"ip-address\": \"192.0.5.1\""
         "    },"
         "    \"subnet\": \"192.0.2.0/24\" }, "
-        "{   \"pool\": [ \"192.0.3.1 - 192.0.3.100\" ],"
+        "{   \"pools\": [ { \"pool\": \"192.0.3.1 - 192.0.3.100\" } ],"
         "    \"relay\": { "
         "        \"ip-address\": \"192.0.5.2\""
         "    },"
@@ -3450,13 +3251,13 @@ TEST_F(Dhcpv4SrvTest, relayOverrideAndClientClass) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ "
-        "{   \"pool\": [ \"192.0.2.2 - 192.0.2.100\" ],"
+        "{   \"pools\": [ { \"pool\": \"192.0.2.2 - 192.0.2.100\" } ],"
         "    \"client-class\": \"foo\", "
         "    \"relay\": { "
         "        \"ip-address\": \"192.0.5.1\""
         "    },"
         "    \"subnet\": \"192.0.2.0/24\" }, "
-        "{   \"pool\": [ \"192.0.3.1 - 192.0.3.100\" ],"
+        "{   \"pools\": [ { \"pool\": \"192.0.3.1 - 192.0.3.100\" } ],"
         "    \"relay\": { "
         "        \"ip-address\": \"192.0.5.1\""
         "    },"
@@ -3513,6 +3314,7 @@ TEST_F(Dhcpv4SrvTest, acceptDirectRequest) {
     // message is considered malformed and the accept() function should
     // return false.
     pkt->setGiaddr(IOAddress("192.0.10.1"));
+    pkt->setRemoteAddr(IOAddress("0.0.0.0"));
     pkt->setLocalAddr(IOAddress("192.0.2.3"));
     pkt->setIface("eth1");
     EXPECT_FALSE(srv.accept(pkt));
@@ -3547,6 +3349,20 @@ TEST_F(Dhcpv4SrvTest, acceptDirectRequest) {
     pkt->setLocalAddr(IOAddress("10.0.0.1"));
     EXPECT_TRUE(srv.accept(pkt));
 
+    // For the DHCPINFORM the ciaddr should be set or at least the source
+    // address.
+    pkt->setType(DHCPINFORM);
+    pkt->setRemoteAddr(IOAddress("10.0.0.101"));
+    EXPECT_TRUE(srv.accept(pkt));
+
+    // When neither ciaddr nor source addres is present, the packet should
+    // be dropped.
+    pkt->setRemoteAddr(IOAddress("0.0.0.0"));
+    EXPECT_FALSE(srv.accept(pkt));
+
+    // When ciaddr is set, the packet should be accepted.
+    pkt->setCiaddr(IOAddress("10.0.0.1"));
+    EXPECT_TRUE(srv.accept(pkt));
 }
 
 // This test checks that the server rejects a message with invalid type.

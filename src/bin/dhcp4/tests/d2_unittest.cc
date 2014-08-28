@@ -13,7 +13,7 @@
 // PERFORMANCE OF THIS SOFTWARE.
 
 #include <dhcp/iface_mgr.h>
-#include <dhcp4/config_parser.h>
+#include <dhcp4/json_config_parser.h>
 #include <dhcp4/tests/d2_unittest.h>
 #include <dhcpsrv/cfgmgr.h>
 
@@ -99,7 +99,7 @@ Dhcp4SrvD2Test::configureD2(bool enable_d2, const bool exp_result,
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         " \"dhcp-ddns\" : {"
         "     \"enable-updates\" : " << (enable_d2 ? "true" : "false") <<  ", "
@@ -287,11 +287,17 @@ TEST_F(Dhcp4SrvD2Test, simpleUDPSend) {
     EXPECT_EQ(0, mgr.getQueueSize());
 }
 
-// Checks that an IO error in sending a request to D2, results in ddns updates being
-// suspended.  This indicates that Dhcp4Srv's error handler has been invoked as expected.
-// Note that this unit test relies on an attempt to send to a server address of 0.0.0.0
-// port 0 fails under all OSs.
+// Checks that an IO error in sending a request to D2, results in ddns updates
+// being suspended.  This indicates that Dhcp4Srv's error handler has been
+// invoked as expected.  Note that this unit test relies on an attempt to send
+// to a server address of 0.0.0.0 port 0 fails, which it does  under all OSs
+// except Solaris 11.
+/// @todo Eventually we should find a way to test this under Solaris.
+#ifndef OS_SOLARIS
 TEST_F(Dhcp4SrvD2Test, forceUDPSendFailure) {
+#else
+TEST_F(Dhcp4SrvD2Test, DISABLED_forceUDPSendFailure) {
+#endif
     // Grab the manager and verify that be default ddns is off
     // and a sender was not started.
     dhcp::D2ClientMgr& mgr = CfgMgr::instance().getD2ClientMgr();

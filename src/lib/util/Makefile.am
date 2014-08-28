@@ -1,10 +1,10 @@
-SUBDIRS = . io unittests tests pyunittests python threads
+SUBDIRS = . io unittests tests python threads
 
 AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib
 AM_CPPFLAGS += -I$(top_srcdir)/src/lib/util -I$(top_builddir)/src/lib/util
 AM_CPPFLAGS += -I$(top_srcdir)/src/lib/exceptions -I$(top_builddir)/src/lib/exceptions
 AM_CPPFLAGS += $(BOOST_INCLUDES)
-AM_CXXFLAGS = $(B10_CXXFLAGS)
+AM_CXXFLAGS = $(KEA_CXXFLAGS)
 # If we use the shared-memory support, corresponding Boost library may
 # cause build failures especially if it's strict about warnings.  We've
 # detected it in ./configure and set BOOST_MAPPED_FILE_CXXFLAG to be more
@@ -31,7 +31,7 @@ if USE_SHARED_MEMORY
 libkea_util_la_SOURCES += memory_segment_mapped.h memory_segment_mapped.cc
 endif
 libkea_util_la_SOURCES += range_utilities.h
-libkea_util_la_SOURCES += hash/sha1.h hash/sha1.cc
+libkea_util_la_SOURCES += signal_set.cc signal_set.h
 libkea_util_la_SOURCES += encode/base16_from_binary.h
 libkea_util_la_SOURCES += encode/base32hex.h encode/base64.h
 libkea_util_la_SOURCES += encode/base32hex_from_binary.h
@@ -44,7 +44,6 @@ libkea_util_la_SOURCES += random/random_number_generator.h
 #4o6
 libkea_util_la_SOURCES += ipc.h
 
-EXTRA_DIST = python/pycppwrapper_util.h
 libkea_util_la_LIBADD = $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 CLEANFILES = *.gcno *.gcda
 

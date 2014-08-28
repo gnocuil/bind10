@@ -17,9 +17,10 @@
 #include <asiolink/io_address.h>
 #include <cc/data.h>
 #include <config/ccsession.h>
-#include <dhcp4/config_parser.h>
+#include <dhcp4/json_config_parser.h>
 #include <dhcp4/tests/dhcp4_test_utils.h>
 #include <dhcp/option4_addrlst.h>
+#include <dhcp/option_int.h>
 #include <dhcp/option_int_array.h>
 #include <dhcp/option_custom.h>
 #include <dhcp/iface_mgr.h>
@@ -44,7 +45,7 @@ Dhcpv4SrvTest::Dhcpv4SrvTest()
     pool_ = Pool4Ptr(new Pool4(IOAddress("192.0.2.100"), IOAddress("192.0.2.110")));
     subnet_->addPool(pool_);
 
-    CfgMgr::instance().deleteActiveIfaces();
+    CfgMgr::instance().getConfiguration()->cfg_iface_.reset();
     CfgMgr::instance().deleteSubnets4();
     CfgMgr::instance().addSubnet4(subnet_);
 
@@ -57,6 +58,7 @@ Dhcpv4SrvTest::Dhcpv4SrvTest()
 Dhcpv4SrvTest::~Dhcpv4SrvTest() {
 
     // Make sure that we revert to default value
+    CfgMgr::instance().getConfiguration()->cfg_iface_.reset();
     CfgMgr::instance().echoClientId(true);
 }
 
@@ -238,9 +240,10 @@ HWAddrPtr Dhcpv4SrvTest::generateHWAddr(size_t size /*= 6*/) {
     return (HWAddrPtr(new HWAddr(mac, hw_type)));
 }
 
-void Dhcpv4SrvTest::checkAddressParams(const Pkt4Ptr& rsp, const SubnetPtr subnet,
-                                       bool t1_mandatory /*= false*/,
-                                       bool t2_mandatory /*= false*/) {
+void Dhcpv4SrvTest::checkAddressParams(const Pkt4Ptr& rsp,
+                                       const SubnetPtr subnet,
+                                       bool t1_present,
+                                       bool t2_present) {
 
     // Technically inPool implies inRange, but let's be on the safe
     // side and check both.
@@ -248,31 +251,35 @@ void Dhcpv4SrvTest::checkAddressParams(const Pkt4Ptr& rsp, const SubnetPtr subne
     EXPECT_TRUE(subnet->inPool(Lease::TYPE_V4, rsp->getYiaddr()));
 
     // Check lease time
-    OptionPtr opt = rsp->getOption(DHO_DHCP_LEASE_TIME);
+    OptionUint32Ptr opt = boost::dynamic_pointer_cast<
+        OptionUint32>(rsp->getOption(DHO_DHCP_LEASE_TIME));
     if (!opt) {
-        ADD_FAILURE() << "Lease time option missing in response";
+        ADD_FAILURE() << "Lease time option missing in response or the"
+            " option has unexpected type";
     } else {
-        EXPECT_EQ(opt->getUint32(), subnet->getValid());
+        EXPECT_EQ(opt->getValue(), subnet->getValid());
     }
 
     // Check T1 timer
-    opt = rsp->getOption(DHO_DHCP_RENEWAL_TIME);
-    if (opt) {
-        EXPECT_EQ(opt->getUint32(), subnet->getT1());
+    opt = boost::dynamic_pointer_cast<
+        OptionUint32>(rsp->getOption(DHO_DHCP_RENEWAL_TIME));
+    if (t1_present) {
+        ASSERT_TRUE(opt) << "Required T1 option missing or it has"
+            " an unexpected type";
+        EXPECT_EQ(opt->getValue(), subnet->getT1());
     } else {
-        if (t1_mandatory) {
-            ADD_FAILURE() << "Required T1 option missing";
-        }
+        EXPECT_FALSE(opt);
     }
 
     // Check T2 timer
-    opt = rsp->getOption(DHO_DHCP_REBINDING_TIME);
-    if (opt) {
-        EXPECT_EQ(opt->getUint32(), subnet->getT2());
+    opt = boost::dynamic_pointer_cast<
+        OptionUint32>(rsp->getOption(DHO_DHCP_REBINDING_TIME));
+    if (t2_present) {
+        ASSERT_TRUE(opt) << "Required T2 option missing or it has"
+            " an unexpected type";
+        EXPECT_EQ(opt->getValue(), subnet->getT2());
     } else {
-        if (t2_mandatory) {
-            ADD_FAILURE() << "Required T2 option missing";
-        }
+        EXPECT_FALSE(opt);
     }
 }
 
@@ -557,16 +564,22 @@ Dhcpv4SrvTest::testDiscoverRequest(const uint8_t msg_type) {
 
 void
 Dhcpv4SrvTest::configure(const std::string& config) {
+    configure(config, srv_);
+}
+
+void
+Dhcpv4SrvTest::configure(const std::string& config, NakedDhcpv4Srv& srv) {
     ElementPtr json = Element::fromJSON(config);
     ConstElementPtr status;
 
     // Configure the server and make sure the config is accepted
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv_, json));
+    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
     ASSERT_TRUE(status);
     int rcode;
     ConstElementPtr comment = config::parseAnswer(rcode, status);
     ASSERT_EQ(0, rcode);
-}
+ }
+
 
 
 }; // end of isc::dhcp::test namespace

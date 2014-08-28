@@ -2,7 +2,7 @@ AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib
 AM_CPPFLAGS += $(BOOST_INCLUDES)
 AM_CPPFLAGS += -I$(top_srcdir)/src/lib/dns -I$(top_builddir)/src/lib/dns
 
-AM_CXXFLAGS = $(B10_CXXFLAGS)
+AM_CXXFLAGS = $(KEA_CXXFLAGS)
 if USE_GXX			#XXX: see ../Makefile.am
 AM_CXXFLAGS += -Wno-unused-parameter
 endif
@@ -21,6 +21,7 @@ if HAVE_GTEST
 TESTS += run_unittests
 # (TODO: these need to be completed and moved to tests/)
 run_unittests_SOURCES = data_unittests.cc session_unittests.cc run_unittests.cc
+run_unittests_SOURCES += data_file_unittests.cc
 run_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES)
 run_unittests_LDFLAGS = $(AM_LDFLAGS) $(GTEST_LDFLAGS)
 

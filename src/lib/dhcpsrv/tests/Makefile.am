@@ -6,7 +6,7 @@ AM_CPPFLAGS += -DTEST_DATA_BUILDDIR=\"$(abs_top_builddir)/src/lib/dhcpsrv/tests\
 AM_CPPFLAGS += -DDHCP_DATA_DIR=\"$(abs_top_builddir)/src/lib/dhcpsrv/tests\"
 AM_CPPFLAGS += -DINSTALL_PROG=\"$(abs_top_srcdir)/install-sh\"
 
-AM_CXXFLAGS = $(B10_CXXFLAGS)
+AM_CXXFLAGS = $(KEA_CXXFLAGS)
 
 # Some versions of GCC warn about some versions of Boost regarding
 # missing initializer for members in its posix_time.
@@ -55,16 +55,20 @@ libdhcpsrv_unittests_SOURCES  = run_unittests.cc
 libdhcpsrv_unittests_SOURCES += addr_utilities_unittest.cc
 libdhcpsrv_unittests_SOURCES += alloc_engine_unittest.cc
 libdhcpsrv_unittests_SOURCES += callout_handle_store_unittest.cc
+libdhcpsrv_unittests_SOURCES += configuration_unittest.cc
 libdhcpsrv_unittests_SOURCES += cfgmgr_unittest.cc
 libdhcpsrv_unittests_SOURCES += csv_lease_file4_unittest.cc
 libdhcpsrv_unittests_SOURCES += csv_lease_file6_unittest.cc
 libdhcpsrv_unittests_SOURCES += d2_client_unittest.cc
 libdhcpsrv_unittests_SOURCES += d2_udp_unittest.cc
+libdhcpsrv_unittests_SOURCES += daemon_unittest.cc
 libdhcpsrv_unittests_SOURCES += dbaccess_parser_unittest.cc
+libdhcpsrv_unittests_SOURCES += cfg_iface_unittest.cc
 libdhcpsrv_unittests_SOURCES += lease_file_io.cc lease_file_io.h
 libdhcpsrv_unittests_SOURCES += lease_unittest.cc
 libdhcpsrv_unittests_SOURCES += lease_mgr_factory_unittest.cc
 libdhcpsrv_unittests_SOURCES += lease_mgr_unittest.cc
+libdhcpsrv_unittests_SOURCES += logging_unittest.cc
 libdhcpsrv_unittests_SOURCES += generic_lease_mgr_unittest.cc generic_lease_mgr_unittest.h
 libdhcpsrv_unittests_SOURCES += memfile_lease_mgr_unittest.cc
 libdhcpsrv_unittests_SOURCES += dhcp_parsers_unittest.cc

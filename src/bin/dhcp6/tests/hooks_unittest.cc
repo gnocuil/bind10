@@ -17,7 +17,7 @@
 #include <asiolink/io_address.h>
 #include <dhcp/dhcp6.h>
 #include <dhcp/duid.h>
-#include <dhcp6/config_parser.h>
+#include <dhcp6/json_config_parser.h>
 #include <dhcp/dhcp6.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/lease_mgr.h>
@@ -904,11 +904,11 @@ TEST_F(HooksDhcpv6SrvTest, subnet6_select) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet6\": [ { "
-        "    \"pool\": [ \"2001:db8:1::/64\" ],"
+        "    \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ],"
         "    \"subnet\": \"2001:db8:1::/48\", "
         "    \"interface\": \"" + valid_iface_ + "\" "
         " }, {"
-        "    \"pool\": [ \"2001:db8:2::/64\" ],"
+        "    \"pools\": [ { \"pool\": \"2001:db8:2::/64\" } ],"
         "    \"subnet\": \"2001:db8:2::/48\" "
         " } ],"
         "\"valid-lifetime\": 4000 }";
@@ -972,11 +972,11 @@ TEST_F(HooksDhcpv6SrvTest, subnet_select_change) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet6\": [ { "
-        "    \"pool\": [ \"2001:db8:1::/64\" ],"
+        "    \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ],"
         "    \"subnet\": \"2001:db8:1::/48\", "
         "    \"interface\": \"" + valid_iface_ + "\" "
         " }, {"
-        "    \"pool\": [ \"2001:db8:2::/64\" ],"
+        "    \"pools\": [ { \"pool\": \"2001:db8:2::/64\" } ],"
         "    \"subnet\": \"2001:db8:2::/48\" "
         " } ],"
         "\"valid-lifetime\": 4000 }";

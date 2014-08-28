@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+"http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd" [
+<!ENTITY mdash  "&#x2014;" >
+<!ENTITY % version SYSTEM "version.ent">
+%version;
+]>
+
+  <chapter id="intro">
+    <title>Introduction</title>
+    <para>
+      Kea is the next generation of DHCP software developed by ISC.
+      It supports both DHCPv4 and DHCPv6 protocols along with their
+      extensions, e.g. prefix delegation and dynamic updates to DNS.
+    </para>
+
+    <para>
+      Kea was initially developed as a part of the BIND 10 framework
+      (<ulink url="http://bind10.isc.org"/>). In early 2014, ISC
+      made the decision to discontinue active development of BIND 10 and
+      continue development of Kea as standalone DHCP software.
+    </para>
+
+    <para>
+      This guide covers Kea version &__VERSION__;.
+    </para>
+
+    <section>
+      <title>Supported Platforms</title>
+      <para>
+        Kea is officially supported on RedHat Enterprise Linux,
+	CentOS, Fedora and FreeBSD systems. It is also likely to work on many
+	other platforms: builds have been tested on (in no particular order)
+        Debian GNU/Linux 6 and unstable, Ubuntu 9.10, NetBSD 5,
+        Solaris 10 and 11, FreeBSD 7 and 8, CentOS Linux 5.3,
+        MacOS 10.6 and 10.7, and OpenBSD 5.1. Non supported systems
+	(especially non-Linux) are likely to have issues with directly
+	connected DHCPv4 clients.
+      </para>
+      <para>There are currently no plans to port Kea to Windows platforms.</para>
+    </section>
+
+    <section id="required-software">
+      <title>Required Software at Run-time</title>
+
+      <para>
+        Running Kea uses various extra software which may
+        not be provided in the default installation of some operating systems,
+        nor in the standard package collections. You may
+        need to install this required software separately.
+        (For the build requirements, also see
+        <xref linkend="build-requirements"/>.)
+      </para>
+
+      <itemizedlist>
+
+        <listitem>
+            <simpara>
+        Kea supports two crypto libraries: Botan and OpenSSL. Only one of them
+        is required to be installed during compilation. Kea uses the Botan
+        crypto library for C++ (<ulink url="http://botan.randombit.net/"/>),
+        version 1.8 or later. As an alternative to Botan, Kea can use the
+        OpenSSL crypto library (<ulink url="http://www.openssl.org/"/>).
+        It requires a version with SHA-2 support.
+            </simpara>
+        </listitem>
+
+        <listitem>
+            <simpara>
+        Kea uses the log4cplus C++ logging library
+        (<ulink url="http://log4cplus.sourceforge.net/"/>).
+        It requires at least log4cplus version 1.0.3.
+            </simpara>
+        </listitem>
+
+        <listitem>
+            <simpara>
+	In order to store lease information in a MySQL database, Kea requires MySQL
+    headers and libraries.  This is an optional dependency in that Kea can be
+    built without MySQL support.
+            </simpara>
+        </listitem>
+
+        <listitem>
+            <simpara>
+	In order to store lease information in a PostgreSQL database, Kea requires PostgreSQL
+    headers and libraries.  This is an optional dependency in that Kea can be
+    built without PostgreSQL support.
+            </simpara>
+        </listitem>
+      </itemizedlist>
+    </section>
+
+    <section id="kea_software">
+      <title>Kea Software</title>
+      <para>
+        Kea is modular.  Part of this modularity is
+        accomplished using multiple cooperating processes which, together,
+        provide the server functionality.
+        The following software is included with Kea:
+      </para>
+
+      <para>
+
+        <itemizedlist>
+
+          <listitem>
+            <simpara>
+              <command>keactrl</command> &mdash;
+              Tool to start, stop, reconfigure, and report status
+              for the Kea servers.
+            </simpara>
+          </listitem>
+
+          <listitem>
+            <simpara>
+              <command>kea-dhcp4</command> &mdash;
+              DHCPv4 server process.
+              This process responds to DHCPv4 queries from clients.
+            </simpara>
+          </listitem>
+
+          <listitem>
+            <simpara>
+              <command>kea-dhcp6</command> &mdash;
+              DHCPv6 server process.
+              This process responds to DHCPv6 queries from clients.
+            </simpara>
+          </listitem>
+
+          <listitem>
+            <simpara>
+              <command>kea-dhcp-ddns</command> &mdash;
+              DHCP-DDNS process.
+              This process acts as an intermediary between the DHCP servers
+              and DNS server. It receives name update requests from the DHCP
+              servers and sends DNS Update messages to the DNS servers.
+            </simpara>
+          </listitem>
+
+          <listitem>
+            <simpara>
+              <command>perfdhcp</command> &mdash;
+              DHCP benchmarking tool which simulates multiple clients to
+              test both DHCPv4 and DHCPv6 servers performance.
+            </simpara>
+          </listitem>
+
+        </itemizedlist>
+      </para>
+
+    </section>
+
+    <para>
+      The tools and modules are covered in full detail in this guide.
+<!-- TODO point to these -->
+      In addition, manual pages are also provided in the default installation.
+    </para>
+
+    <para>
+      Kea also provides C++ libraries and programmer interfaces for
+      DHCP.  These include detailed developer documentation and
+      code examples.
+<!-- TODO point to this -->
+    </para>
+
+  </chapter>

@@ -1,4 +1,4 @@
-// Copyright (C) 2013  Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2014 Internet Systems Consortium, Inc. ("ISC")
 //
 // Permission to use, copy, modify, and/or distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
@@ -35,20 +35,19 @@ namespace {
 
 /// @brief Valid configuration containing an unavailable IP address.
 const char* bad_ip_d2_config = "{ "
-                        "\"interface\" : \"eth1\" , "
                         "\"ip_address\" : \"1.1.1.1\" , "
                         "\"port\" : 5031, "
                         "\"tsig_keys\": ["
                         "{ \"name\": \"d2_key.tmark.org\" , "
-                        "   \"algorithm\": \"md5\" ,"
-                        "   \"secret\": \"0123456989\" "
+                        "   \"algorithm\": \"HMAC-MD5\" ,"
+                        "   \"secret\": \"LSWXnfkKZjdPJI5QxlpnfQ==\" "
                         "} ],"
                         "\"forward_ddns\" : {"
                         "\"ddns_domains\": [ "
                         "{ \"name\": \"tmark.org\" , "
                         "  \"key_name\": \"d2_key.tmark.org\" , "
                         "  \"dns_servers\" : [ "
-                        "  { \"hostname\": \"one.tmark\" } "
+                        "  { \"ip_address\": \"127.0.0.101\" } "
                         "] } ] }, "
                         "\"reverse_ddns\" : {"
                         "\"ddns_domains\": [ "
@@ -574,7 +573,7 @@ TEST_F(D2ProcessTest, normalShutdown) {
     // by an io_service event and callback.
     time_duration elapsed = stop - start;
     EXPECT_TRUE(elapsed.total_milliseconds() >= 1900 &&
-                elapsed.total_milliseconds() <= 2100);
+                elapsed.total_milliseconds() <= 2200);
 }
 
 
@@ -599,7 +598,7 @@ TEST_F(D2ProcessTest, fatalErrorShutdown) {
     // during io callback processing.
     time_duration elapsed = stop - start;
     EXPECT_TRUE(elapsed.total_milliseconds() >= 1900 &&
-                elapsed.total_milliseconds() <= 2100);
+                elapsed.total_milliseconds() <= 2200);
 }
 
 /// @brief Used to permit visual inspection of logs to ensure
@@ -607,7 +606,6 @@ TEST_F(D2ProcessTest, fatalErrorShutdown) {
 /// loopback.
 TEST_F(D2ProcessTest, notLoopbackTest) {
     const char* config = "{ "
-                        "\"interface\" : \"\" , "
                         "\"ip_address\" : \"0.0.0.0\" , "
                         "\"port\" : 53001, "
                         "\"tsig_keys\": [],"
@@ -626,7 +624,6 @@ TEST_F(D2ProcessTest, notLoopbackTest) {
 /// DHCP_DDNS_NOT_ON_LOOPBACK is not issued.
 TEST_F(D2ProcessTest, v4LoopbackTest) {
     const char* config = "{ "
-                        "\"interface\" : \"\" , "
                         "\"ip_address\" : \"127.0.0.1\" , "
                         "\"port\" : 53001, "
                         "\"tsig_keys\": [],"
@@ -640,7 +637,6 @@ TEST_F(D2ProcessTest, v4LoopbackTest) {
 /// DHCP_DDNS_NOT_ON_LOOPBACK is not issued.
 TEST_F(D2ProcessTest, v6LoopbackTest) {
     const char* config = "{ "
-                        "\"interface\" : \"\" , "
                         "\"ip_address\" : \"::1\" , "
                         "\"port\" : 53001, "
                         "\"tsig_keys\": [],"

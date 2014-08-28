@@ -1,4 +1,4 @@
-// Copyright (C) 2011  Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011, 2014  Internet Systems Consortium, Inc. ("ISC")
 //
 // Permission to use, copy, modify, and/or distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
@@ -136,6 +136,20 @@ protected:
         IntervalTimerTest* test_obj_;
         IntervalTimer& timer_;
         int count_;
+    };
+    class TimerCallBackAccumulator: public std::unary_function<void, void> {
+    public:
+        TimerCallBackAccumulator(IntervalTimerTest* test_obj, int &counter) :
+            test_obj_(test_obj), counter_(counter) {
+        }
+        void operator()() {
+            ++counter_;
+            return;
+        }
+    private:
+        IntervalTimerTest* test_obj_;
+        // Reference to integer accumulator
+        int& counter_;
     };
 protected:
     IOService io_service_;
@@ -284,4 +298,89 @@ TEST_F(IntervalTimerTest, overwriteIntervalTimer) {
     EXPECT_TRUE(timer_called_);
     // Expect interval is updated: return value of getInterval() is updated
     EXPECT_EQ(itimer.getInterval(), 100);
+}
+
+// This test verifies that timers operate correctly based on their mode.
+TEST_F(IntervalTimerTest, intervalModeTest) {
+    // Create a timer to control the duration of the test.
+    IntervalTimer test_timer(io_service_);
+    test_timer.setup(TimerCallBack(this), 2000);
+
+    // Create an timer which automatically reschedules itself.  Use the
+    // accumulator callback to increment local counter for it.
+    int repeater_count = 0;
+    IntervalTimer repeater(io_service_);
+    repeater.setup(TimerCallBackAccumulator(this, repeater_count), 10);
+
+    // Create a one-shot timer. Use the accumulator callback to increment
+    // local counter variable for it.
+    int one_shot_count = 0;
+    IntervalTimer one_shot(io_service_);
+    one_shot.setup(TimerCallBackAccumulator(this, one_shot_count), 10,
+                   IntervalTimer::ONE_SHOT);
+
+    // As long as service runs at least one event handler, loop until
+    // we've hit our goals.  It won't return zero unless is out of
+    // work or the the service has been stopped by the test timer.
+    int cnt = 0;
+    while (((cnt = io_service_.get_io_service().run_one()) > 0)
+           && (repeater_count < 5)) {
+        // deliberately empty
+    };
+
+    // If cnt is zero, then something went wrong.
+    EXPECT_TRUE(cnt > 0);
+
+    // The loop stopped make sure it was for the right reason.
+    EXPECT_EQ(repeater_count, 5);
+    EXPECT_EQ(one_shot_count, 1);
+}
+
+// This test verifies that the same timer can be reused in either mode.
+TEST_F(IntervalTimerTest, timerReuseTest) {
+    // Create a timer to control the duration of the test.
+    IntervalTimer test_timer(io_service_);
+    test_timer.setup(TimerCallBack(this), 2000);
+
+    // Create a one-shot timer. Use the accumulator callback to increment
+    // local counter variable for it.
+    int one_shot_count = 0;
+    IntervalTimer one_shot(io_service_);
+    TimerCallBackAccumulator callback(this, one_shot_count);
+    one_shot.setup(callback, 10, IntervalTimer::ONE_SHOT);
+
+    // Run until a single event handler executes.  This should be our
+    // one-shot expiring.
+    io_service_.run_one();
+
+    // Verify the timer expired once.
+    ASSERT_EQ(one_shot_count, 1);
+
+    // Setup the one-shot to go again.
+    one_shot.setup(callback, 10, IntervalTimer::ONE_SHOT);
+
+    // Run until a single event handler executes.  This should be our
+    // one-shot expiring.
+    io_service_.run_one();
+
+    // Verify the timer expired once.
+    ASSERT_EQ(one_shot_count, 2);
+
+    // Setup the timer to be repeating.
+    one_shot.setup(callback, 10, IntervalTimer::REPEATING);
+
+    // As long as service runs at least one event handler, loop until
+    // we've hit our goals.  It won't return zero unless is out of
+    // work or the the service has been stopped by the test timer.
+    int cnt = 0;
+    while ((cnt = io_service_.get_io_service().run_one())
+            && (one_shot_count < 4)) {
+        // deliberately empty
+    };
+
+    // If cnt is zero, then something went wrong.
+    EXPECT_TRUE(cnt > 0);
+
+    // Verify the timer repeated.
+    EXPECT_GE(one_shot_count, 4);
 }

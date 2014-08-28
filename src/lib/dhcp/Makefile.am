@@ -2,7 +2,7 @@ SUBDIRS = . tests
 
 AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib
 AM_CPPFLAGS += $(BOOST_INCLUDES)
-AM_CXXFLAGS = $(B10_CXXFLAGS)
+AM_CXXFLAGS = $(KEA_CXXFLAGS)
 
 # Some versions of GCC warn about some versions of Boost regarding
 # missing initializer for members in its posix_time.
@@ -53,8 +53,14 @@ libkea_dhcp___la_SOURCES += pkt_filter_inet6.cc pkt_filter_inet6.h
 #DHCP4o6
 libkea_dhcp___la_SOURCES += pkt4o6.cc pkt4o6.h
 
+# Utilize Linux Packet Filtering on Linux.
 if OS_LINUX
 libkea_dhcp___la_SOURCES += pkt_filter_lpf.cc pkt_filter_lpf.h
+endif
+
+# Utilize Berkeley Packet Filtering on BSD.
+if OS_BSD
+libkea_dhcp___la_SOURCES += pkt_filter_bpf.cc pkt_filter_bpf.h
 endif
 
 libkea_dhcp___la_SOURCES += std_option_defs.h
@@ -65,6 +71,7 @@ libkea_dhcp___la_CPPFLAGS = $(AM_CPPFLAGS) $(LOG4CPLUS_INCLUDES)
 libkea_dhcp___la_LIBADD   = $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
 libkea_dhcp___la_LIBADD  += $(top_builddir)/src/lib/dns/libkea-dns++.la
 libkea_dhcp___la_LIBADD  += $(top_builddir)/src/lib/util/libkea-util.la
+libkea_dhcp___la_LIBADD  += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_dhcp___la_LDFLAGS  = -no-undefined -version-info 2:0:0
 
 EXTRA_DIST  = README libdhcp++.dox

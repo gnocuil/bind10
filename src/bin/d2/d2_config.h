@@ -19,6 +19,7 @@
 #include <d2/d2_asio.h>
 #include <d2/d_cfg_mgr.h>
 #include <dhcpsrv/dhcp_parsers.h>
+#include <dns/tsig.h>
 #include <exceptions/exceptions.h>
 
 #include <boost/foreach.hpp>
@@ -59,7 +60,7 @@ namespace d2 {
 /// that the application can carry out DNS update exchanges with it. Servers
 /// are represented by the class, DnsServerInfo.
 ///
-/// The configuration specification for use with BIND10 is detailed in the file
+/// The configuration specification for use with Kea is detailed in the file
 /// dhcp-ddns.spec.
 ///
 /// The parsing class hierarchy reflects this same scheme.  Working top down:
@@ -143,24 +144,183 @@ public:
         isc::Exception(file, line, what) { };
 };
 
+/// @brief Acts as a storage vault for D2 global scalar parameters
+class D2Params {
+public:
+    /// @brief Default configuration constants.
+    //@{
+    /// @todo For now these are hard-coded as configuration layer cannot
+    /// readily provide them (see Trac #3358).
+    static const char *DFT_IP_ADDRESS;
+    static const size_t DFT_PORT;
+    static const size_t DFT_DNS_SERVER_TIMEOUT;
+    static const char *DFT_NCR_PROTOCOL;
+    static const char *DFT_NCR_FORMAT;
+    //@}
+
+    /// @brief Constructor
+    ///
+    /// @param ip_address IP address at which D2 should listen for NCRs
+    /// @param port port on which D2 should listen NCRs
+    /// @param dns_server_timeout  maximum amount of time in milliseconds to
+    /// wait for a response to a single DNS update request.
+    /// @param ncr_protocol socket protocol D2 should use to receive NCRS
+    /// @param ncr_format packet format of the inbound NCRs
+    ///
+    /// @throw D2CfgError if:
+    /// -# ip_address is 0.0.0.0 or ::
+    /// -# port is 0
+    /// -# dns_server_timeout is < 1
+    /// -# ncr_protocol is invalid, currently only NCR_UDP is supported
+    /// -# ncr_format is invalid, currently only FMT_JSON is supported
+    D2Params(const isc::asiolink::IOAddress& ip_address,
+                   const size_t port,
+                   const size_t dns_server_timeout,
+                   const dhcp_ddns::NameChangeProtocol& ncr_protocol,
+                   const dhcp_ddns::NameChangeFormat& ncr_format);
+
+    /// @brief Default constructor
+    /// The default constructor creates an instance that has updates disabled.
+    D2Params();
+
+    /// @brief Destructor
+    virtual ~D2Params();
+
+    /// @brief Return the IP address D2 listens on.
+    const isc::asiolink::IOAddress& getIpAddress() const {
+        return(ip_address_);
+    }
+
+    /// @brief Return the TCP/UPD port D2 listens on.
+    size_t getPort() const {
+        return(port_);
+    }
+
+    /// @brief Return the DNS server timeout value.
+    size_t getDnsServerTimeout() const {
+        return(dns_server_timeout_);
+    }
+
+    /// @brief Return the socket protocol in use.
+    const dhcp_ddns::NameChangeProtocol& getNcrProtocol() const {
+         return(ncr_protocol_);
+    }
+
+    /// @brief Return the expected format of inbound requests (NCRs).
+    const dhcp_ddns::NameChangeFormat& getNcrFormat() const {
+        return(ncr_format_);
+    }
+
+    /// @brief Return summary of the configuration used by D2.
+    ///
+    /// The returned summary of the configuration is meant to be appended to
+    /// the log message informing about the successful completion of the
+    /// D2 configuration.
+    ///
+    /// @return Configuration summary in the textual format.
+    std::string getConfigSummary() const;
+
+    /// @brief Compares two D2Paramss for equality
+    bool operator == (const D2Params& other) const;
+
+    /// @brief Compares two D2Paramss for inequality
+    bool operator != (const D2Params& other) const;
+
+    /// @brief Generates a string representation of the class contents.
+    std::string toText() const;
+
+protected:
+    /// @brief Validates member values.
+    ///
+    /// Method is used by the constructor to validate member contents.
+    /// Currently checks:
+    /// -# ip_address is not 0.0.0.0 or ::
+    /// -# port is not 0
+    /// -# dns_server_timeout is 0
+    /// -# ncr_protocol is UDP
+    /// -# ncr_format is JSON
+    ///
+    /// @throw D2CfgError if contents are invalid
+    virtual void validateContents();
+
+private:
+    /// @brief IP address D2 listens on.
+    isc::asiolink::IOAddress ip_address_;
+
+    /// @brief IP port D2 listens on.
+    size_t port_;
+
+    /// @brief Timeout for a single DNS packet exchange in milliseconds.
+    size_t dns_server_timeout_;
+
+    /// @brief The socket protocol to use.
+    /// Currently only UDP is supported.
+    dhcp_ddns::NameChangeProtocol ncr_protocol_;
+
+    /// @brief Format of the inbound requests (NCRs).
+    /// Currently only JSON format is supported.
+    dhcp_ddns::NameChangeFormat ncr_format_;
+};
+
+/// @brief Dumps the contents of a D2Params as text to an output stream
+///
+/// @param os output stream to which text should be sent
+/// @param config D2Param instnace to dump
+std::ostream&
+operator<<(std::ostream& os, const D2Params& config);
+
+/// @brief Defines a pointer for D2Params instances.
+typedef boost::shared_ptr<D2Params> D2ParamsPtr;
+
 /// @brief Represents a TSIG Key.
 ///
-/// Currently, this is simple storage class containing the basic attributes of
-/// a TSIG Key.  It is intended primarily as a reference for working with
-/// actual keys and may eventually be replaced by isc::dns::TSIGKey.  TSIG Key
-/// functionality at this stage is strictly limited to configuration parsing.
-/// @todo full functionality for using TSIG during DNS updates will be added
-/// in a future release.
+/// Acts as both a storage class containing the basic attributes which
+/// describe a TSIG Key, as well as owning and providing access to an
+/// instance of the actual key (@ref isc::dns::TSIGKey) that can be used
+/// by the IO layer for signing and verifying messages.
+///
 class TSIGKeyInfo {
 public:
+    /// @brief Defines string values for the supported TSIG algorithms
+    //@{
+    static const char* HMAC_MD5_STR;
+    static const char* HMAC_SHA1_STR;
+    static const char* HMAC_SHA256_STR;
+    static const char* HMAC_SHA224_STR;
+    static const char* HMAC_SHA384_STR;
+    static const char* HMAC_SHA512_STR;
+    //}@
 
     /// @brief Constructor
     ///
     /// @param name the unique label used to identify this key
-    /// @param algorithm the name of the encryption alogirthm this key uses.
-    /// (@todo This will be a fixed list of choices)
+    /// @param algorithm the id of the encryption alogirthm this key uses.
+    /// Currently supported values are (case insensitive):
+    /// -# "HMAC-MD5"
+    /// -# "HMAC-SHA1"
+    /// -# "HMAC-SHA224"
+    /// -# "HMAC-SHA256"
+    /// -# "HMAC-SHA384"
+    /// -# "HMAC-SHA512"
     ///
-    /// @param secret the secret component of this key
+    /// @param secret  The base-64 encoded secret component for this key.
+    /// (A suitable string for use here could be obtained by running the
+    /// BIND 9 dnssec-keygen program; the contents of resulting key file
+    /// will look similar to:
+    /// @code
+    ///   Private-key-format: v1.3
+    ///   Algorithm: 157 (HMAC_MD5)
+    ///   Key: LSWXnfkKZjdPJI5QxlpnfQ==
+    ///   Bits: AAA=
+    ///   Created: 20140515143700
+    ///   Publish: 20140515143700
+    ///   Activate: 20140515143700
+    /// @endcode
+    /// where the value the "Key:" entry is the secret component of the key.)
+    ///
+    /// @throw D2CfgError if values supplied are invalid:
+    /// name cannot be blank, algorithm must be a supported value,
+    /// secret must be a non-blank, base64 encoded string.
     TSIGKeyInfo(const std::string& name, const std::string& algorithm,
                 const std::string& secret);
 
@@ -174,7 +334,7 @@ public:
         return (name_);
     }
 
-    /// @brief Getter which returns the key's algorithm.
+    /// @brief Getter which returns the key's algorithm string ID
     ///
     /// @return returns the algorithm as as std::string.
     const std::string getAlgorithm() const {
@@ -188,18 +348,55 @@ public:
         return (secret_);
     }
 
+    /// @brief Getter which returns the TSIG key used to sign and verify
+    /// messages
+    ///
+    /// @return const pointer reference to dns::TSIGKey.
+    const dns::TSIGKeyPtr& getTSIGKey() const {
+        return (tsig_key_);
+    }
+
+    /// @brief Converts algorithm id to dns::TSIGKey algorithm dns::Name
+    ///
+    /// @param algorithm_id string value to translate into an algorithm name.
+    /// Currently supported values are (case insensitive):
+    /// -# "HMAC-MD5"
+    /// -# "HMAC-SHA1"
+    /// -# "HMAC-SHA224"
+    /// -# "HMAC-SHA256"
+    /// -# "HMAC-SHA384"
+    /// -# "HMAC-SHA512"
+    ///
+    /// @return const reference to a dns::Name containing the algorithm name
+    /// @throw BadValue if ID isn't recognized.
+    static const dns::Name& stringToAlgorithmName(const std::string&
+                                                  algorithm_id);
+
 private:
+    /// @brief Creates the actual TSIG key instance member
+    ///
+    /// Replaces this tsig_key member with a key newly created using the key
+    /// name, algorithm id, and secret.
+    /// This method is currently only called by the constructor, however it
+    /// could be called post-construction should keys ever support expiration.
+    ///
+    /// @throw D2CfgError with an explanation if the key could not be created.
+    void remakeKey();
+
     /// @brief The name of the key.
     ///
     /// This value is the unique identifier that domains use to
     /// to specify which TSIG key they need.
     std::string name_;
 
-    /// @brief The algorithm that should be used for this key.
+    /// @brief The string ID of the algorithm that should be used for this key.
     std::string algorithm_;
 
-    /// @brief The secret value component of this key.
+    /// @brief The base64 encoded string secret value component of this key.
     std::string secret_;
+
+    /// @brief The actual TSIG key.
+    dns::TSIGKeyPtr tsig_key_;
 };
 
 /// @brief Defines a pointer for TSIGKeyInfo instances.
@@ -335,10 +532,12 @@ public:
     /// @brief Constructor
     ///
     /// @param name is the domain name of the domain.
-    /// @param key_name is the TSIG key name for use with this domain.
     /// @param servers is the list of server(s) supporting this domain.
-    DdnsDomain(const std::string& name, const std::string& key_name,
-               DnsServerInfoStoragePtr servers);
+    /// @param tsig_key_info pointer to the TSIGKeyInfo for the dommain's key
+    /// It defaults to an empty pointer, signifying the domain has no key.
+    DdnsDomain(const std::string& name,
+               DnsServerInfoStoragePtr servers,
+               const TSIGKeyInfoPtr& tsig_key_info = TSIGKeyInfoPtr());
 
     /// @brief Destructor
     virtual ~DdnsDomain();
@@ -350,12 +549,11 @@ public:
         return (name_);
     }
 
-    /// @brief Getter which returns the domain's TSIG key name.
+    /// @brief Convenience method which returns the domain's TSIG key name.
     ///
-    /// @return returns the key name in an std::string.
-    const std::string getKeyName() const {
-        return (key_name_);
-    }
+    /// @return returns the key name in an std::string. If domain has no
+    /// TSIG key, the string will empty.
+    const std::string getKeyName() const;
 
     /// @brief Getter which returns the domain's list of servers.
     ///
@@ -364,15 +562,24 @@ public:
         return (servers_);
     }
 
+    /// @brief Getter which returns the domain's TSIGKey info
+    ///
+    /// @return returns the pointer to the server storage.  If the domain
+    /// is not configured to use TSIG the pointer will be empty.
+    const TSIGKeyInfoPtr& getTSIGKeyInfo() {
+        return (tsig_key_info_);
+    }
+
 private:
     /// @brief The domain name of the domain.
     std::string name_;
 
-    /// @brief The name of the TSIG key for use with this domain.
-    std::string key_name_;
-
     /// @brief The list of server(s) supporting this domain.
     DnsServerInfoStoragePtr servers_;
+
+    /// @brief Pointer to domain's the TSIGKeyInfo.
+    /// Value is empty if the domain is not configured for TSIG.
+    TSIGKeyInfoPtr tsig_key_info_;
 };
 
 /// @brief Defines a pointer for DdnsDomain instances.
@@ -556,10 +763,17 @@ public:
     ///
     /// @param config_id is the "item_name" for a specific member element of
     /// the "tsig_key" specification.
+    /// @param pos position within the configuration text (or file) of element
+    /// to be parsed.  This is passed for error messaging.
     ///
     /// @return returns a pointer to newly created parser.
-    virtual isc::dhcp::ParserPtr createConfigParser(const std::string&
-                                                    config_id);
+    ///
+    /// @throw D2CfgError if configuration contains an unknown parameter
+    virtual isc::dhcp::ParserPtr
+    createConfigParser(const std::string& config_id,
+                       const isc::data::Element::Position& pos =
+                       isc::data::Element::ZERO_POSITION());
+
     /// @brief Commits the TSIGKeyInfo configuration
     /// Currently this method is a NOP, as the key instance is created and
     /// then added to a local list of keys in build().
@@ -659,8 +873,15 @@ public:
     /// Parses a configuration for the elements needed to instantiate a
     /// DnsServerInfo, validates those entries, creates a DnsServerInfo instance
     /// then attempts to add to a list of  servers.
+    /// @param pos position within the configuration text (or file) of element
+    /// to be parsed.  This is passed for error messaging.
     ///
     /// @param server_config is the "dns_server" configuration to parse
+    ///
+    /// @throw D2CfgError if:
+    /// -# hostname is not blank, hostname is not yet supported
+    /// -# ip_address is invalid
+    /// -# port is 0
     virtual void build(isc::data::ConstElementPtr server_config);
 
     /// @brief Creates a parser for the given "dns_server" member element id.
@@ -672,10 +893,16 @@ public:
     ///
     /// @param config_id is the "item_name" for a specific member element of
     /// the "dns_server" specification.
+    /// @param pos position within the configuration text (or file) of element
+    /// to be parsed.  This is passed for error messaging.
     ///
     /// @return returns a pointer to newly created parser.
-    virtual isc::dhcp::ParserPtr createConfigParser(const std::string&
-                                                    config_id);
+    ///
+    /// @throw D2CfgError if configuration contains an unknown parameter
+    virtual isc::dhcp::ParserPtr
+    createConfigParser(const std::string& config_id,
+                       const isc::data::Element::Position& =
+                       isc::data::Element::ZERO_POSITION());
 
     /// @brief Commits the configured DnsServerInfo
     /// Currently this method is a NOP, as the server instance is created and
@@ -787,10 +1014,16 @@ public:
     ///
     /// @param config_id is the "item_name" for a specific member element of
     /// the "ddns_domain" specification.
+    /// @param pos position within the configuration text (or file) of element
+    /// to be parsed.  This is passed for error messaging.
     ///
     /// @return returns a pointer to newly created parser.
-    virtual isc::dhcp::ParserPtr createConfigParser(const std::string&
-                                                    config_id);
+    ///
+    /// @throw D2CfgError if configuration contains an unknown parameter
+    virtual isc::dhcp::ParserPtr
+    createConfigParser(const std::string& config_id,
+                       const isc::data::Element::Position& pos =
+                       isc::data::Element::ZERO_POSITION());
 
     /// @brief Commits the configured DdnsDomain
     /// Currently this method is a NOP, as the domain instance is created and
@@ -921,10 +1154,16 @@ public:
     ///
     /// @param config_id is the "item_name" for a specific member element of
     /// the manager specification.
+    /// @param pos position within the configuration text (or file) of element
+    /// to be parsed.  This is passed for error messaging.
     ///
     /// @return returns a pointer to newly created parser.
-    virtual isc::dhcp::ParserPtr createConfigParser(const std::string&
-                                                    config_id);
+    ///
+    /// @throw D2CfgError if configuration contains an unknown parameter
+    virtual isc::dhcp::ParserPtr
+    createConfigParser(const std::string& config_id,
+                       const isc::data::Element::Position& pos =
+                       isc::data::Element::ZERO_POSITION());
 
     /// @brief Commits the configured DdsnDomainListMgr
     /// Currently this method is a NOP, as the manager instance is created

@@ -1,4 +1,4 @@
-ACLOCAL_AMFLAGS = -I m4macros -I examples/m4 ${ACLOCAL_FLAGS}
+ACLOCAL_AMFLAGS = -I m4macros ${ACLOCAL_FLAGS}
 # ^^^^^^^^ This has to be the first line and cannot come later in this
 # Makefile.am due to some bork in some versions of autotools.
 
@@ -7,6 +7,7 @@ USE_LCOV=@USE_LCOV@
 LCOV=@LCOV@
 GENHTML=@GENHTML@
 DISTCHECK_GTEST_CONFIGURE_FLAG=@DISTCHECK_GTEST_CONFIGURE_FLAG@
+DISTCHECK_CRYPTO_CONFIGURE_FLAG=@DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 
 DISTCLEANFILES = config.report
 
@@ -15,6 +16,9 @@ DISTCHECK_CONFIGURE_FLAGS = --disable-install-configurations
 
 # Use same --with-gtest flag if set
 DISTCHECK_CONFIGURE_FLAGS += $(DISTCHECK_GTEST_CONFIGURE_FLAG)
+
+# Keep the crypto backend config
+DISTCHECK_CONFIGURE_FLAGS += $(DISTCHECK_CRYPTO_CONFIGURE_FLAG)
 
 dist_doc_DATA = AUTHORS COPYING ChangeLog README
 
@@ -73,19 +77,25 @@ report-cpp-coverage:
 			c++/4.4\*/ext/\* \
 			c++/4.4\*/\*-\*/bits/\* \
 			boost/\* \
+if HAVE_BOTAN
 			botan/\* \
+endif
 			ext/asio/\* \
 			ext/coroutine/\* \
 			gtest/\* \
+			include/\* \
 			log4cplus/\* \
-			usr/include/\* \
+if HAVE_OPENSSL
+			openssl/\* \
+endif
 			tests/\* \
 			unittests/\* \
 			\*_unittests.cc \
 			\*_unittest.cc \
 			\*_unittests.h \
 			--output report.info ; \
-		$(GENHTML) --legend -o $(abs_top_builddir)/coverage-cpp-html report.info ; \
+		sed -e "s|$(abs_top_srcdir)|$(abs_top_builddir)|g" < report.info > report.info.2 ; \
+		$(GENHTML) --legend -o $(abs_top_builddir)/coverage-cpp-html report.info.2 ; \
 		echo "Generated C++ Code Coverage report in HTML at $(abs_top_builddir)/coverage-cpp-html" ; \
 	else \
 		echo "C++ code coverage not enabled at configuration time." ; \
@@ -119,6 +129,7 @@ cppcheck:
 ### include tool to generate documentation from log message specifications
 ### in the distributed tarball:
 EXTRA_DIST = tools/system_messages.py
+EXTRA_DIST += tools/path_replacer.sh
 
 #### include external sources in the distributed tarball:
 EXTRA_DIST += ext/asio/README

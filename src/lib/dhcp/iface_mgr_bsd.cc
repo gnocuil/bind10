@@ -18,6 +18,7 @@
 
 #include <dhcp/iface_mgr.h>
 #include <dhcp/iface_mgr_error_handler.h>
+#include <dhcp/pkt_filter_bpf.h>
 #include <dhcp/pkt_filter_inet.h>
 #include <exceptions/exceptions.h>
 
@@ -144,10 +145,21 @@ bool IfaceMgr::os_receive4(struct msghdr& /*m*/, Pkt4Ptr& /*pkt*/) {
 }
 
 void
-IfaceMgr::setMatchingPacketFilter(const bool /* direct_response_desired */) {
-    // @todo Currently we ignore the preference to use direct traffic
-    // because it hasn't been implemented for BSD systems.
-    setPacketFilter(PktFilterPtr(new PktFilterInet()));
+IfaceMgr::setMatchingPacketFilter(const bool direct_response_desired) {
+    // If direct response is desired we have to use BPF. If the direct
+    // response is not desired we use datagram socket supported by the
+    // PktFilterInet class. Note however that on BSD systems binding the
+    // datagram socket to the device is not supported and the server would
+    // have no means to determine on which interface the packet has been
+    // received. Hence, it is discouraged to use PktFilterInet for the
+    // server.
+    if (direct_response_desired) {
+        setPacketFilter(PktFilterPtr(new PktFilterBPF()));
+
+    } else {
+        setPacketFilter(PktFilterPtr(new PktFilterInet()));
+
+    }
 }
 
 bool
@@ -156,10 +168,9 @@ IfaceMgr::openMulticastSocket(Iface& iface,
                               const uint16_t port,
                               IfaceMgrErrorMsgCallback error_handler) {
     try {
-        // This should open a socket, bound it to link-local address
+        // This should open a socket, bind it to link-local address
         // and join multicast group.
-        openSocket(iface.getName(), addr, port,
-                   iface.flag_multicast_);
+        openSocket(iface.getName(), addr, port, iface.flag_multicast_);
 
     } catch (const Exception& ex) {
         IFACEMGR_ERROR(SocketConfigError, error_handler,
@@ -170,6 +181,20 @@ IfaceMgr::openMulticastSocket(Iface& iface,
 
     }
     return (true);
+}
+
+int
+IfaceMgr::openSocket6(Iface& iface, const IOAddress& addr, uint16_t port,
+                      const bool join_multicast) {
+    // On BSD, we bind the socket to in6addr_any and join multicast group
+    // to receive multicast traffic. So, if the multicast is requested,
+    // replace the address specified by the caller with the "unspecified"
+    // address.
+    IOAddress actual_address = join_multicast ? IOAddress("::") : addr;
+    SocketInfo info = packet_filter6_->openSocket(iface, actual_address, port,
+                                                  join_multicast);
+    iface.addSocket(info);
+    return (info.sockfd_);
 }
 
 

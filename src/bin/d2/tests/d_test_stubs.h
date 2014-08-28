@@ -1,4 +1,4 @@
-// Copyright (C) 2013  Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2014 Internet Systems Consortium, Inc. ("ISC")
 //
 // Permission to use, copy, modify, and/or distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
@@ -23,7 +23,15 @@
 #include <d2/d_controller.h>
 #include <d2/d_cfg_mgr.h>
 
+#include <boost/date_time/posix_time/posix_time.hpp>
+
+using namespace boost::posix_time;
+
 #include <gtest/gtest.h>
+
+#include <fstream>
+#include <iostream>
+#include <sstream>
 
 namespace isc {
 namespace d2 {
@@ -135,9 +143,9 @@ public:
     /// indicate an abnormal termination.
     virtual void run();
 
-    /// @brief Implements the process shutdown procedure. 
+    /// @brief Implements the process shutdown procedure.
     ///
-    /// This sets the instance shutdown flag monitored by run()  and stops 
+    /// This sets the instance shutdown flag monitored by run()  and stops
     /// the IO service.
     virtual isc::data::ConstElementPtr shutdown(isc::data::ConstElementPtr);
 
@@ -172,6 +180,13 @@ public:
     virtual isc::data::ConstElementPtr command(const std::string& command,
                                                isc::data::ConstElementPtr args);
 
+    /// @brief Returns configuration summary in the textual format.
+    ///
+    /// @return Always an empty string.
+    virtual std::string getConfigSummary(const uint32_t) {
+        return ("");
+    }
+
     // @brief Destructor
     virtual ~DStubProcess();
 };
@@ -184,8 +199,8 @@ public:
 /// without polluting production derivations (e.g. D2Process).  It uses
 /// DStubProcess as its application process class.  It is a full enough
 /// implementation to support running both stand alone and integrated.
-/// Obviously BIND10 connectivity is not available under unit tests, so
-/// testing here is limited to "failures" to communicate with BIND10.
+/// Obviously Bundy connectivity is not available under unit tests, so
+/// testing here is limited to "failures" to communicate with Bundy.
 class DStubController : public DControllerBase {
 public:
     /// @brief Static singleton instance method. This method returns the
@@ -208,6 +223,25 @@ public:
 
     /// @brief Defines the executable name used to construct the controller
     static const char* stub_bin_name_;
+
+    /// @brief Gets the list of signals that have been caught and processed.
+    std::vector<int>& getProcessedSignals() {
+        return (processed_signals_);
+    }
+
+    /// @brief Controls whether signals are processed in full or merely
+    /// recorded.
+    ///
+    /// If true, signal handling will stop after recording the signal.
+    /// Otherwise the base class signal handler,
+    /// DControllerBase::processSignals will also be invoked. This switch is
+    /// useful for ensuring that IOSignals are delivered as expected without
+    /// incurring the full impact such as reconfiguring or shutting down.
+    ///
+    /// @param value boolean which if true enables record-only behavior
+    void recordSignalOnly(bool value) {
+       record_signal_only_ = value;
+    }
 
 protected:
     /// @brief Handles additional command line options that are supported
@@ -255,13 +289,32 @@ protected:
     /// @return returns a string containing the option letters.
     virtual const std::string getCustomOpts() const;
 
+    /// @brief Application-level "signal handler"
+    ///
+    /// Overrides the base class implementation such that this method
+    /// is invoked each time an IOSignal is processed.  It records the
+    /// signal received and unless we are in record-only behavior, it
+    /// in invokes the base class implementation.
+    ///
+    /// @param signum OS signal value received
+    virtual void processSignal(int signum);
+
 private:
     /// @brief Constructor is private to protect singleton integrity.
     DStubController();
 
+    /// @brief Vector to record the signal values received.
+    std::vector<int> processed_signals_;
+
+    /// @brief Boolean for controlling if signals are merely recorded.
+    bool record_signal_only_;
+
 public:
     virtual ~DStubController();
 };
+
+/// @brief Defines a pointer to a DStubController.
+typedef boost::shared_ptr<DStubController> DStubControllerPtr;
 
 /// @brief Abstract Test fixture class that wraps a DControllerBase. This class
 /// is a friend class of DControllerBase which allows it access to class
@@ -281,7 +334,8 @@ public:
     ///
     /// @param instance_getter is a function pointer to the static instance
     /// method of the DControllerBase derivation under test.
-    DControllerTest(InstanceGetter instance_getter) {
+    DControllerTest(InstanceGetter instance_getter)
+         : write_timer_(), new_cfg_content_() {
         // Set the static fetcher member, then invoke it via getController.
         // This ensures the singleton is instantiated.
         instanceGetter_ = instance_getter;
@@ -292,7 +346,12 @@ public:
     /// Note the controller singleton is destroyed. This is essential to ensure
     /// a clean start between tests.
     virtual ~DControllerTest() {
+        if (write_timer_) {
+            write_timer_->cancel();
+        }
+
         getController().reset();
+        static_cast<void>(unlink(CFG_TEST_FILE));
     }
 
     /// @brief Convenience method that destructs and then recreates the
@@ -361,24 +420,6 @@ public:
         return (getController()->io_service_);
     }
 
-    /// @brief Compares stand alone flag with the given value.
-    ///
-    /// @param value
-    ///
-    /// @return returns true if the stand alone flag is equal to the given
-    /// value.
-    bool checkStandAlone(bool value) {
-        return (getController()->isStandAlone() == value);
-    }
-
-    /// @brief Sets the controller's stand alone flag to the given value.
-    ///
-    /// @param value is the new value to assign.
-    ///
-    void setStandAlone(bool value) {
-        getController()->setStandAlone(value);
-    }
-
     /// @brief Compares verbose flag with the given value.
     ///
     /// @param value
@@ -386,6 +427,15 @@ public:
     /// @return returns true if the verbose flag is equal to the given value.
     bool checkVerbose(bool value) {
         return (getController()->isVerbose() == value);
+    }
+
+    /// @brief Compares configuration file name with the given value.
+    ///
+    /// @param value file name to compare against
+    ///
+    /// @return returns true if the verbose flag is equal to the given value.
+    bool checkConfigFileName(const std::string& value) {
+        return (getController()->getConfigFile() == value);
     }
 
     /// @Wrapper to invoke the Controller's parseArgs method.  Please refer to
@@ -400,23 +450,11 @@ public:
         getController()->initProcess();
     }
 
-    /// @Wrapper to invoke the Controller's establishSession method.  Please
-    /// refer to DControllerBase::establishSession for details.
-    void establishSession() {
-        getController()->establishSession();
-    }
-
     /// @Wrapper to invoke the Controller's launch method.  Please refer to
     /// DControllerBase::launch for details.
     void launch(int argc, char* argv[]) {
         optind = 1;
         getController()->launch(argc, argv, true);
-    }
-
-    /// @Wrapper to invoke the Controller's disconnectSession method.  Please
-    /// refer to DControllerBase::disconnectSession for details.
-    void disconnectSession() {
-        getController()->disconnectSession();
     }
 
     /// @Wrapper to invoke the Controller's updateConfig method.  Please
@@ -437,18 +475,106 @@ public:
     /// command callback function.
     static void genShutdownCallback() {
         isc::data::ElementPtr arg_set;
-        DControllerBase::commandHandler(SHUT_DOWN_COMMAND, arg_set);
+        getController()->executeCommand(SHUT_DOWN_COMMAND, arg_set);
     }
 
     /// @brief Callback that throws an exception.
     static void genFatalErrorCallback() {
         isc_throw (DProcessBaseError, "simulated fatal error");
     }
+
+    /// @brief writes specified content to a well known file
+    ///
+    /// Writes given JSON content to CFG_TEST_FILE. It will wrap the
+    /// content within a JSON element whose name is equal to the controller's
+    /// app name or the given module name if not blank:
+    ///
+    /// @code
+    ///    { "<app_name>" : <content> }
+    /// @endcod
+    ///
+    /// suffix the content within a JSON element with the given module
+    /// name or  wrapped by a JSON
+    /// element  . Tests will
+    /// attempt to read that file.
+    ///
+    /// @param content JSON text to be written to file
+    /// @param module_name  content content to be written to file
+    void writeFile(const std::string& content,
+                   const std::string& module_name = "");
+
+    /// @brief Method used as timer callback to invoke writeFile.
+    ///
+    /// Wraps a call to writeFile passing in new_cfg_content_.  This allows
+    /// the method to be bound as an IntervalTimer callback.
+    virtual void timedWriteCallback();
+
+    /// @brief Schedules the given content to overwrite the config file.
+    ///
+    /// Creates a one-shot IntervalTimer whose callback will overwrite the
+    /// configuration with the given content.  This allows the configuration
+    /// file to replaced write_time_ms after DControllerBase::launch() has
+    /// invoked runProcess().
+    ///
+    /// @param config JSON string containing the deisred content for the config
+    /// file.
+    /// @param write_time_ms time in milliseconds to delay before writing the
+    /// file.
+    void scheduleTimedWrite(const std::string& config, int write_time_ms);
+
+    /// @brief Convenience method for invoking standard, valid launch
+    ///
+    /// This method sets up a timed run of the DController::launch.  It does
+    /// the following:
+    /// - It creates command line argument variables argc/argv
+    /// - Invokes writeFile to create the config file with the given content
+    /// - Schedules a shutdown time timer to call DController::executeShutdown
+    /// after the interval
+    /// - Records the start time
+    /// - Invokes DController::launch() with the command line arguments
+    /// - After launch returns, it calculates the elapsed time and returns it
+    ///
+    /// @param config configuration file content to write before calling launch
+    /// @param run_time_ms  maximum amount of time to allow runProcess() to
+    /// continue.
+    /// @param[out] elapsed_time the actual time in ms spent in launch().
+    void runWithConfig(const std::string& config, int run_time_ms,
+                       time_duration& elapsed_time);
+
+    /// @brief Fetches the controller's process
+    ///
+    /// @return A pointer to the process which may be null if it has not yet
+    /// been instantiated.
+    DProcessBasePtr getProcess();
+
+    /// @brief Fetches the process's configuration manager
+    ///
+    /// @return A pointer to the manager which may be null if it has not yet
+    /// been instantiated.
+    DCfgMgrBasePtr getCfgMgr();
+
+    /// @brief Fetches the configuration manager's context
+    ///
+    /// @return A pointer to the context which may be null if it has not yet
+    /// been instantiated.
+    DCfgContextBasePtr getContext();
+
+    /// @brief Timer used for delayed configuration file writing.
+    asiolink::IntervalTimerPtr write_timer_;
+
+    /// @brief String which contains the content delayed file writing will use.
+    std::string new_cfg_content_;
+
+    /// @brief Name of a config file used during tests
+    static const char* CFG_TEST_FILE;
 };
 
-/// @brief Simple parser derivation for testing the basics of configuration
-/// parsing.
-class TestParser : public isc::dhcp::DhcpConfigParser {
+/// @brief a collection of elements that store uint32 values
+typedef isc::dhcp::ValueStorage<isc::data::ConstElementPtr> ObjectStorage;
+typedef boost::shared_ptr<ObjectStorage> ObjectStoragePtr;
+
+/// @brief Simple parser derivation for parsing object elements.
+class ObjectParser : public isc::dhcp::DhcpConfigParser {
 public:
 
     /// @brief Constructor
@@ -456,10 +582,10 @@ public:
     /// See @ref DhcpConfigParser class for details.
     ///
     /// @param param_name name of the parsed parameter
-    TestParser(const std::string& param_name);
+    ObjectParser(const std::string& param_name, ObjectStoragePtr& object_values);
 
     /// @brief Destructor
-    virtual ~TestParser();
+    virtual ~ObjectParser();
 
     /// @brief Builds parameter value.
     ///
@@ -486,7 +612,11 @@ private:
 
     /// pointer to the parsed value of the parameter
     isc::data::ConstElementPtr value_;
+
+    /// Pointer to the storage where committed value is stored.
+    ObjectStoragePtr object_values_;
 };
+
 
 /// @brief Test Derivation of the DCfgContextBase class.
 ///
@@ -505,6 +635,11 @@ public:
     /// @brief Destructor
     virtual ~DStubContext();
 
+    /// @brief Creates a clone of a DStubContext.
+    ///
+    /// @return returns a pointer to the new clone.
+    virtual DCfgContextBasePtr clone();
+
     /// @brief Fetches the value for a given "extra" configuration parameter
     /// from the context.
     ///
@@ -513,17 +648,10 @@ public:
     /// value.
     /// @throw throws DhcpConfigError if the context does not contain the
     /// parameter.
-    void getExtraParam(const std::string& name, uint32_t& value);
+    void getObjectParam(const std::string& name,
+                        isc::data::ConstElementPtr& value);
 
-    /// @brief Fetches the extra storage.
-    ///
-    /// @return returns a pointer to the extra storage.
-    isc::dhcp::Uint32StoragePtr getExtraStorage();
-
-    /// @brief Creates a clone of a DStubContext.
-    ///
-    /// @return returns a pointer to the new clone.
-    virtual DCfgContextBasePtr clone();
+    ObjectStoragePtr& getObjectStorage();
 
 protected:
     /// @brief Copy constructor
@@ -533,8 +661,8 @@ private:
     /// @brief Private assignment operator, not implemented.
     DStubContext& operator=(const DStubContext& rhs);
 
-    /// @brief Extra storage for uint32 parameters.
-    isc::dhcp::Uint32StoragePtr extra_values_;
+    /// @brief Stores non-scalar configuration elements
+    ObjectStoragePtr object_values_;
 };
 
 /// @brief Defines a pointer to DStubContext.
@@ -570,15 +698,29 @@ public:
     ///
     /// @param element_id is the string name of the element as it will appear
     /// in the configuration set.
+    /// @param pos position within the configuration text (or file) of element
+    /// to be parsed.  This is passed for error messaging.
     ///
     /// @return returns a ParserPtr to the parser instance.
     /// @throw throws DCfgMgrBaseError if SimFailure is ftElementUnknown.
     virtual isc::dhcp::ParserPtr
-    createConfigParser(const std::string& element_id);
+    createConfigParser(const std::string& element_id,
+                       const isc::data::Element::Position& pos
+                       = isc::data::Element::Position());
+
+    /// @brief Returns a summary of the configuration in the textual format.
+    ///
+    /// @return Always an empty string.
+    virtual std::string getConfigSummary(const uint32_t) {
+        return ("");
+    }
 
     /// @brief A list for remembering the element ids in the order they were
     /// parsed.
     ElementIdList parsed_order_;
+
+    /// @todo
+    virtual DCfgContextBasePtr createNewContext();
 };
 
 /// @brief Defines a pointer to DStubCfgMgr.
@@ -609,9 +751,9 @@ public:
         try  {
             config_set_ = isc::data::Element::fromJSON(json_text);
         } catch (const isc::Exception &ex) {
-            return (::testing::AssertionFailure(::testing::Message() << 
-                                                "JSON text failed to parse:" 
-                                                << ex.what())); 
+            return (::testing::AssertionFailure(::testing::Message() <<
+                                                "JSON text failed to parse:"
+                                                << ex.what()));
         }
 
         return (::testing::AssertionSuccess());
@@ -631,7 +773,7 @@ public:
     /// @brief Compares the status in the given parse result to a given value.
     ///
     /// @param answer Element set containing an integer response and string
-    /// comment. 
+    /// comment.
     /// @param should_be is an integer against which to compare the status.
     ///
     /// @return returns AssertionSuccess if there were no parsing errors,
@@ -645,8 +787,8 @@ public:
             return (testing::AssertionSuccess());
         }
 
-        return (::testing::AssertionFailure(::testing::Message() << 
-                                            "checkAnswer rcode:" << rcode 
+        return (::testing::AssertionFailure(::testing::Message() <<
+                                            "checkAnswer rcode:" << rcode
                                             << " comment: " << *comment));
     }
 
@@ -655,6 +797,68 @@ public:
 
     /// @brief Results of most recent element parsing.
     isc::data::ConstElementPtr answer_;
+};
+
+/// @brief Implements a time-delayed signal
+///
+/// Given an IOService, a signal number, and a time period, this class will
+/// send (raise) the signal to the current process.
+class TimedSignal {
+public:
+    /// @brief Constructor
+    ///
+    /// @param io_service  IOService to run the timer
+    /// @param signum OS signal value (e.g. SIGHUP, SIGUSR1 ...)
+    /// @param milliseconds time in milliseconds to wait until the signal is
+    /// raised.
+    /// @param mode selects between a one-shot signal or a signal which repeats
+    /// at "milliseconds" interval.
+    TimedSignal(asiolink::IOService& io_service, int signum, int milliseconds,
+                const asiolink::IntervalTimer::Mode& mode =
+                asiolink::IntervalTimer::ONE_SHOT)
+        : timer_(new asiolink::IntervalTimer(io_service)) {
+        timer_->setup(SendSignalCallback(signum), milliseconds, mode);
+    }
+
+    /// @brief Cancels the given timer.
+    void cancel() {
+        if (timer_) {
+            timer_->cancel();
+        }
+    }
+
+    /// @brief Destructor.
+    ~TimedSignal() {
+        cancel();
+    }
+
+    /// @brief Callback for the TimeSignal's internal timer.
+    class SendSignalCallback: public std::unary_function<void, void> {
+    public:
+
+        /// @brief Constructor
+        ///
+        /// @param signum OS signal value of the signal to send
+        SendSignalCallback(int signum) : signum_(signum) {
+        }
+
+        /// @brief Callback method invoked when the timer expires
+        ///
+        /// Calls raise with the given signal which should generate that
+        /// signal to the given process.
+        void operator()() {
+            ASSERT_EQ(0, raise(signum_));
+            return;
+        }
+
+    private:
+        /// @brief Stores the OS signal value to send.
+        int signum_;
+    };
+
+private:
+    /// @brief Timer which controls when the signal is sent.
+    asiolink::IntervalTimerPtr timer_;
 };
 
 /// @brief Defines a small but valid DHCP-DDNS compliant configuration for

@@ -13,22 +13,11 @@
 // PERFORMANCE OF THIS SOFTWARE.
 
 #include <cryptolink/cryptolink.h>
+#include <cryptolink/crypto_hash.h>
 #include <cryptolink/crypto_hmac.h>
-
-#include <botan/botan.h>
 
 namespace isc {
 namespace cryptolink {
-
-// For Botan, we use the CryptoLink class object in RAII style
-class CryptoLinkImpl {
-private:
-    Botan::LibraryInitializer botan_init_;
-};
-
-CryptoLink::~CryptoLink() {
-    delete impl_;
-}
 
 CryptoLink&
 CryptoLink::getCryptoLink() {
@@ -45,16 +34,10 @@ CryptoLink::getCryptoLinkInternal() {
     return (instance);
 }
 
-void
-CryptoLink::initialize() {
-    CryptoLink& c = getCryptoLinkInternal();
-    if (c.impl_ == NULL) {
-        try {
-            c.impl_ = new CryptoLinkImpl();
-        } catch (const Botan::Exception& ex) {
-            isc_throw(InitializationError, ex.what());
-        }
-    }
+Hash*
+CryptoLink::createHash(const HashAlgorithm hash_algorithm)
+{
+    return (new Hash(hash_algorithm));
 }
 
 HMAC*

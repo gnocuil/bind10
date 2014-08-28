@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2012  Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2012, 2014 Internet Systems Consortium, Inc. ("ISC")
 //
 // Permission to use, copy, modify, and/or distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
@@ -27,7 +27,7 @@ using namespace isc::dhcp;
 using namespace std;
 
 /// This file contains entry point (main() function) for standard DHCPv4 server
-/// component for BIND10 framework. It parses command-line arguments and
+/// component of Kea software suite. It parses command-line arguments and
 /// instantiates ControlledDhcpv4Srv class that is responsible for establishing
 /// connection with msgq (receiving commands and configuration) and also
 /// creating Dhcpv4 server object as well.
@@ -37,15 +37,25 @@ using namespace std;
 
 namespace {
 
-const char* const DHCP4_NAME = "b10-dhcp4";
+const char* const DHCP4_NAME = "kea-dhcp4";
 
+const char* const DHCP4_LOGGER_NAME = "kea-dhcp4";
+
+/// @brief Prints Kea Usage and exits
+///
+/// Note: This function never returns. It terminates the process.
 void
 usage() {
-    cerr << "Usage: " << DHCP4_NAME << " [-v] [-s] [-p number]" << endl;
-    cerr << "  -v: verbose output" << endl;
-    cerr << "  -s: stand-alone mode (don't connect to BIND10)" << endl;
+    cerr << "Kea DHCPv4 server, version " << VERSION << endl;
+    cerr << endl;
+    cerr << "Usage: " << DHCP4_NAME
+         << " [-v] [-V] [-d] [-p number] [-c file]" << endl;
+    cerr << "  -c file: specify configuration file" << endl;
+    cerr << "  -d: debug mode with extra verbosity (former -v)" << endl;
     cerr << "  -p number: specify non-standard port number 1-65535 "
          << "(useful for testing only)" << endl;
+    cerr << "  -v: print version number and exit" << endl;
+    cerr << "  -V: print extended version and exit" << endl;
     exit(EXIT_FAILURE);
 }
 } // end of anonymous namespace
@@ -55,18 +65,24 @@ main(int argc, char* argv[]) {
     int ch;
     int port_number = DHCP4_SERVER_PORT; // The default. any other values are
                                          // useful for testing only.
-    bool stand_alone = false;  // Should be connect to BIND10 msgq?
     bool verbose_mode = false; // Should server be verbose?
 
-    while ((ch = getopt(argc, argv, "vsp:")) != -1) {
+    // The standard config file
+    std::string config_file("");
+
+    while ((ch = getopt(argc, argv, "dvVp:c:")) != -1) {
         switch (ch) {
-        case 'v':
+        case 'd':
             verbose_mode = true;
             break;
 
-        case 's':
-            stand_alone = true;
-            break;
+        case 'v':
+            cout << Daemon::getVersion(false) << endl;
+            return (EXIT_SUCCESS);
+
+        case 'V':
+            cout << Daemon::getVersion(true) << endl;
+            return (EXIT_SUCCESS);
 
         case 'p':
             try {
@@ -83,6 +99,10 @@ main(int argc, char* argv[]) {
             }
             break;
 
+        case 'c': // config file
+            config_file = optarg;
+            break;
+
         default:
             usage();
         }
@@ -93,39 +113,61 @@ main(int argc, char* argv[]) {
         usage();
     }
 
-    // Initialize logging.  If verbose, we'll use maximum verbosity.
-    // If standalone is enabled, do not buffer initial log messages
-    isc::log::initLogger(DHCP4_NAME,
-                         (verbose_mode ? isc::log::DEBUG : isc::log::INFO),
-                         isc::log::MAX_DEBUG_LEVEL, NULL, !stand_alone);
-    LOG_INFO(dhcp4_logger, DHCP4_STARTING);
-    LOG_DEBUG(dhcp4_logger, DBG_DHCP4_START, DHCP4_START_INFO)
-              .arg(getpid()).arg(port_number).arg(verbose_mode ? "yes" : "no")
-              .arg(stand_alone ? "yes" : "no" );
-
+    // Configuration file is required.
+    if (config_file.empty()) {
+        cerr << "Configuration file not specified." << endl;
+        usage();
+    }
 
     int ret = EXIT_SUCCESS;
+
     try {
+        // Initialize logging.  If verbose, we'll use maximum verbosity.
+        Daemon::loggerInit(DHCP4_LOGGER_NAME, verbose_mode);
+        LOG_DEBUG(dhcp4_logger, DBG_DHCP4_START, DHCP4_START_INFO)
+            .arg(getpid()).arg(port_number).arg(verbose_mode ? "yes" : "no");
+
+        LOG_INFO(dhcp4_logger, DHCP4_STARTING).arg(VERSION);
+
+        // Create the server instance.
         ControlledDhcpv4Srv server(port_number);
-        if (!stand_alone) {
+
+        // Remember verbose-mode
+        server.setVerbose(verbose_mode);
+
+        try {
+            // Initialize the server.
+            server.init(config_file);
+        } catch (const std::exception& ex) {
+
             try {
-                server.establishSession();
-            } catch (const std::exception& ex) {
-                LOG_ERROR(dhcp4_logger, DHCP4_SESSION_FAIL).arg(ex.what());
-                // Let's continue. It is useful to have the ability to run
-                // DHCP server in stand-alone mode, e.g. for testing
-                // We do need to make sure logging is no longer buffered
-                // since then it would not print until dhcp6 is stopped
+                // Let's log out what went wrong.
                 isc::log::LoggerManager log_manager;
                 log_manager.process();
+                LOG_ERROR(dhcp4_logger, DHCP4_INIT_FAIL).arg(ex.what());
+            } catch (...) {
+                // The exeption thrown during the initialization could originate
+                // from logger subsystem. Therefore LOG_ERROR() may fail as well.
+                cerr << "Failed to initialize server: " << ex.what() << endl;
             }
-        } else {
-            LOG_DEBUG(dhcp4_logger, DBG_DHCP4_START, DHCP4_STANDALONE);
+
+            return (EXIT_FAILURE);
         }
+
+        // And run the main loop of the server.
         server.run();
+
         LOG_INFO(dhcp4_logger, DHCP4_SHUTDOWN);
 
     } catch (const std::exception& ex) {
+
+        // First, we print the error on stderr (that should always work)
+        cerr << DHCP4_NAME << ": Fatal error during start up: " << ex.what()
+             << endl;
+
+        // Let's also try to log it using logging system, but we're not
+        // sure if it's usable (the exception may have been thrown from
+        // the logger subsystem)
         LOG_FATAL(dhcp4_logger, DHCP4_SERVER_FAILED).arg(ex.what());
         ret = EXIT_FAILURE;
     }

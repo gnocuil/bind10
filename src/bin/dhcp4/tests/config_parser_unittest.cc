@@ -19,12 +19,13 @@
 
 #include <config/ccsession.h>
 #include <dhcp4/dhcp4_srv.h>
-#include <dhcp4/config_parser.h>
+#include <dhcp4/json_config_parser.h>
 #include <dhcp/option4_addrlst.h>
 #include <dhcp/option_custom.h>
 #include <dhcp/option_int.h>
 #include <dhcp/docsis3_option_defs.h>
 #include <dhcp/classify.h>
+#include <dhcp/tests/iface_mgr_test_config.h>
 #include <dhcpsrv/subnet.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/testutils/config_result_check.h>
@@ -63,8 +64,7 @@ std::string specfile(const std::string& name) {
 }
 
 /// @brief Tests that the spec file is valid.
-/// Verifies that the BIND10 DHCP-DDNS configuration specification file
-//  is valid.
+/// Verifies that the Kea DHCPv4 configuration specification file is valid.
 TEST(Dhcp4SpecTest, basicSpec) {
     (isc::config::moduleSpecFromFile(specfile("dhcp4.spec")));
     ASSERT_NO_THROW(isc::config::moduleSpecFromFile(specfile("dhcp4.spec")));
@@ -78,7 +78,8 @@ public:
         // deal with sockets here, just check if configuration handling
         // is sane.
         srv_.reset(new Dhcpv4Srv(0));
-        CfgMgr::instance().deleteActiveIfaces();
+        // Create fresh context.
+        globalContext()->copyContext(ParserContext(Option::V4));
     }
 
     // Check that no hooks libraries are loaded.  This is a pre-condition for
@@ -183,7 +184,7 @@ public:
             "\"rebind-timer\": 2000, "
             "\"renew-timer\": 1000, "
             "\"subnet4\": [ { "
-            "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+            "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
             "    \"subnet\": \"192.0.2.0/24\", "
             "    \"option-data\": [ {";
         bool first = true;
@@ -510,6 +511,73 @@ TEST_F(Dhcp4ParserTest, emptySubnet) {
     checkGlobalUint32("valid-lifetime", 4000);
 }
 
+/// Check that the renew-timer doesn't have to be specified, in which case
+/// it is marked unspecified in the Subnet.
+TEST_F(Dhcp4ParserTest, unspecifiedRenewTimer) {
+    ConstElementPtr status;
+
+    string config = "{ \"interfaces\": [ \"*\" ],"
+        "\"rebind-timer\": 2000, "
+        "\"subnet4\": [ { "
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
+        "    \"subnet\": \"192.0.2.0/24\" } ],"
+        "\"valid-lifetime\": 4000 }";
+
+    ElementPtr json = Element::fromJSON(config);
+
+    EXPECT_NO_THROW(status = configureDhcp4Server(*srv_, json));
+
+    // returned value should be 0 (success)
+    checkResult(status, 0);
+    checkGlobalUint32("rebind-timer", 2000);
+    checkGlobalUint32("valid-lifetime", 4000);
+
+    Subnet4Ptr subnet = CfgMgr::instance().getSubnet4(IOAddress("192.0.2.200"),
+                                                      classify_);
+    ASSERT_TRUE(subnet);
+    EXPECT_TRUE(subnet->getT1().unspecified());
+    EXPECT_FALSE(subnet->getT2().unspecified());
+    EXPECT_EQ(2000, subnet->getT2());
+    EXPECT_EQ(4000, subnet->getValid());
+
+    // Check that subnet-id is 1
+    EXPECT_EQ(1, subnet->getID());
+
+}
+
+/// Check that the rebind-timer doesn't have to be specified, in which case
+/// it is marked unspecified in the Subnet.
+TEST_F(Dhcp4ParserTest, unspecifiedRebindTimer) {
+    ConstElementPtr status;
+
+    string config = "{ \"interfaces\": [ \"*\" ],"
+        "\"renew-timer\": 1000, "
+        "\"subnet4\": [ { "
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
+        "    \"subnet\": \"192.0.2.0/24\" } ],"
+        "\"valid-lifetime\": 4000 }";
+
+    ElementPtr json = Element::fromJSON(config);
+
+    EXPECT_NO_THROW(status = configureDhcp4Server(*srv_, json));
+
+    // returned value should be 0 (success)
+    checkResult(status, 0);
+    checkGlobalUint32("renew-timer", 1000);
+    checkGlobalUint32("valid-lifetime", 4000);
+
+    Subnet4Ptr subnet = CfgMgr::instance().getSubnet4(IOAddress("192.0.2.200"),
+                                                      classify_);
+    ASSERT_TRUE(subnet);
+    EXPECT_FALSE(subnet->getT1().unspecified());
+    EXPECT_EQ(1000, subnet->getT1());
+    EXPECT_TRUE(subnet->getT2().unspecified());
+    EXPECT_EQ(4000, subnet->getValid());
+
+    // Check that subnet-id is 1
+    EXPECT_EQ(1, subnet->getID());
+}
+
 /// The goal of this test is to verify if defined subnet uses global
 /// parameter timer definitions.
 TEST_F(Dhcp4ParserTest, subnetGlobalDefaults) {
@@ -520,7 +588,7 @@ TEST_F(Dhcp4ParserTest, subnetGlobalDefaults) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         "\"valid-lifetime\": 4000 }";
 
@@ -555,20 +623,20 @@ TEST_F(Dhcp4ParserTest, multipleSubnets) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\" "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.3.101 - 192.0.3.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.3.101 - 192.0.3.150\" } ],"
         "    \"subnet\": \"192.0.3.0/24\", "
         "    \"id\": 0 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.4.101 - 192.0.4.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.4.101 - 192.0.4.150\" } ],"
         "    \"subnet\": \"192.0.4.0/24\" "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.5.101 - 192.0.5.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.5.101 - 192.0.5.150\" } ],"
         "    \"subnet\": \"192.0.5.0/24\" "
         " } ],"
         "\"valid-lifetime\": 4000 }";
@@ -606,22 +674,22 @@ TEST_F(Dhcp4ParserTest, multipleSubnetsExplicitIDs) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\", "
         "    \"id\": 1024 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.3.101 - 192.0.3.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.3.101 - 192.0.3.150\" } ],"
         "    \"subnet\": \"192.0.3.0/24\", "
         "    \"id\": 100 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.4.101 - 192.0.4.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.4.101 - 192.0.4.150\" } ],"
         "    \"subnet\": \"192.0.4.0/24\", "
         "    \"id\": 1 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.5.101 - 192.0.5.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.5.101 - 192.0.5.150\" } ],"
         "    \"subnet\": \"192.0.5.0/24\", "
         "    \"id\": 34 "
         " } ],"
@@ -657,22 +725,22 @@ TEST_F(Dhcp4ParserTest, multipleSubnetsOverlapingIDs) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\", "
         "    \"id\": 1024 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.3.101 - 192.0.3.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.3.101 - 192.0.3.150\" } ],"
         "    \"subnet\": \"192.0.3.0/24\", "
         "    \"id\": 100 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.4.101 - 192.0.4.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.4.101 - 192.0.4.150\" } ],"
         "    \"subnet\": \"192.0.4.0/24\", "
         "    \"id\": 1024 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.5.101 - 192.0.5.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.5.101 - 192.0.5.150\" } ],"
         "    \"subnet\": \"192.0.5.0/24\", "
         "    \"id\": 34 "
         " } ],"
@@ -695,22 +763,22 @@ TEST_F(Dhcp4ParserTest, reconfigureRemoveSubnet) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\", "
         "    \"id\": 1 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.3.101 - 192.0.3.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.3.101 - 192.0.3.150\" } ],"
         "    \"subnet\": \"192.0.3.0/24\", "
         "    \"id\": 2 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.4.101 - 192.0.4.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.4.101 - 192.0.4.150\" } ],"
         "    \"subnet\": \"192.0.4.0/24\", "
         "    \"id\": 3 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.5.101 - 192.0.5.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.5.101 - 192.0.5.150\" } ],"
         "    \"subnet\": \"192.0.5.0/24\", "
         "    \"id\": 4 "
         " } ],"
@@ -721,17 +789,17 @@ TEST_F(Dhcp4ParserTest, reconfigureRemoveSubnet) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\", "
         "    \"id\": 1 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.3.101 - 192.0.3.150\" ],"
+        "    \"pools\": [ { \"pool\":  \"192.0.3.101 - 192.0.3.150\" } ],"
         "    \"subnet\": \"192.0.3.0/24\", "
         "    \"id\": 2 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.4.101 - 192.0.4.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.4.101 - 192.0.4.150\" } ],"
         "    \"subnet\": \"192.0.4.0/24\", "
         "    \"id\": 3 "
         " } ],"
@@ -742,17 +810,17 @@ TEST_F(Dhcp4ParserTest, reconfigureRemoveSubnet) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\", "
         "    \"id\": 1 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.4.101 - 192.0.4.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.4.101 - 192.0.4.150\" } ],"
         "    \"subnet\": \"192.0.4.0/24\", "
         "    \"id\": 3 "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.5.101 - 192.0.5.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.5.101 - 192.0.5.150\" } ],"
         "    \"subnet\": \"192.0.5.0/24\", "
         "    \"id\": 4 "
         " } ],"
@@ -820,7 +888,7 @@ TEST_F(Dhcp4ParserTest, nextServerGlobal) {
         "\"renew-timer\": 1000, "
         "\"next-server\": \"1.2.3.4\", "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         "\"valid-lifetime\": 4000 }";
 
@@ -849,7 +917,7 @@ TEST_F(Dhcp4ParserTest, nextServerSubnet) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"next-server\": \"1.2.3.4\", "
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         "\"valid-lifetime\": 4000 }";
@@ -880,7 +948,7 @@ TEST_F(Dhcp4ParserTest, nextServerNegative) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"rebind-timer\": 2000, "
         "    \"renew-timer\": 1000, "
         "    \"next-server\": \"a.b.c.d\", "
@@ -892,7 +960,7 @@ TEST_F(Dhcp4ParserTest, nextServerNegative) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"rebind-timer\": 2000, "
         "    \"renew-timer\": 1000, "
         "    \"next-server\": \"2001:db8::1\", "
@@ -904,7 +972,7 @@ TEST_F(Dhcp4ParserTest, nextServerNegative) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"rebind-timer\": 2000, "
         "    \"renew-timer\": 1000, "
         "    \"next-server\": \"\", "
@@ -940,7 +1008,7 @@ TEST_F(Dhcp4ParserTest, nextServerOverride) {
         "\"renew-timer\": 1000, "
         "\"next-server\": \"192.0.0.1\", "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"next-server\": \"1.2.3.4\", "
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         "\"valid-lifetime\": 4000 }";
@@ -970,7 +1038,7 @@ TEST_F(Dhcp4ParserTest, echoClientId) {
         "\"renew-timer\": 1000, "
         "\"echo-client-id\": false,"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         "\"valid-lifetime\": 4000 }";
 
@@ -979,7 +1047,7 @@ TEST_F(Dhcp4ParserTest, echoClientId) {
         "\"renew-timer\": 1000, "
         "\"echo-client-id\": true,"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\":  \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         "\"valid-lifetime\": 4000 }";
 
@@ -1011,7 +1079,7 @@ TEST_F(Dhcp4ParserTest, subnetLocal) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"renew-timer\": 1, "
         "    \"rebind-timer\": 2, "
         "    \"valid-lifetime\": 4,"
@@ -1033,6 +1101,63 @@ TEST_F(Dhcp4ParserTest, subnetLocal) {
     EXPECT_EQ(4, subnet->getValid());
 }
 
+// This test checks that multiple pools can be defined and handled properly.
+// The test defines 2 subnets, each with 2 pools.
+TEST_F(Dhcp4ParserTest, multiplePools) {
+
+    // Collection with two subnets, each with 2 pools.
+    string config = "{ \"interfaces\": [ \"*\" ],"
+        "\"rebind-timer\": 2000, "
+        "\"renew-timer\": 1000, "
+        "\"subnet4\": [ { "
+        "    \"pools\": [ "
+        "        { \"pool\": \"192.0.2.0/28\" },"
+        "        { \"pool\": \"192.0.2.200-192.0.2.255\" }"
+        "    ],"
+        "    \"subnet\": \"192.0.2.0/24\" "
+        " },"
+        " {"
+        "    \"pools\": [ "
+        "    { \"pool\": \"192.0.3.0/25\" },"
+        "    { \"pool\": \"192.0.3.128/25\" }"
+        "    ],"
+        "    \"subnet\": \"192.0.3.0/24\""
+        " } ],"
+        "\"valid-lifetime\": 4000 }";
+    ElementPtr json;
+    ASSERT_NO_THROW(json = Element::fromJSON(config));
+
+    ConstElementPtr status;
+    ASSERT_NO_THROW(status = configureDhcp4Server(*srv_, json));
+    checkResult(status, 0);
+
+    const Subnet4Collection* subnets = CfgMgr::instance().getSubnets4();
+    ASSERT_TRUE(subnets);
+    ASSERT_EQ(2, subnets->size()); // We expect 2 subnets
+
+    // Check the first subnet
+    const PoolCollection& pools1 = subnets->at(0)->getPools(Lease::TYPE_V4);
+    ASSERT_EQ(2, pools1.size());
+    EXPECT_EQ("type=V4, 192.0.2.0-192.0.2.15",
+              pools1[0]->toText());
+    EXPECT_EQ("type=V4, 192.0.2.200-192.0.2.255",
+              pools1[1]->toText());
+    // There shouldn't be any TA or PD pools
+    EXPECT_THROW(subnets->at(0)->getPools(Lease::TYPE_TA), BadValue);
+    EXPECT_THROW(subnets->at(0)->getPools(Lease::TYPE_PD), BadValue);
+
+    // Check the second subnet
+    const PoolCollection& pools2 = subnets->at(1)->getPools(Lease::TYPE_V4);
+    ASSERT_EQ(2, pools2.size());
+    EXPECT_EQ("type=V4, 192.0.3.0-192.0.3.127",
+              pools2[0]->toText());
+    EXPECT_EQ("type=V4, 192.0.3.128-192.0.3.255",
+              pools2[1]->toText());
+    // There shouldn't be any TA or PD pools
+    EXPECT_THROW(subnets->at(0)->getPools(Lease::TYPE_TA).empty(), BadValue);
+    EXPECT_THROW(subnets->at(0)->getPools(Lease::TYPE_PD).empty(), BadValue);
+}
+
 // Test verifies that a subnet with pool values that do not belong to that
 // pool are rejected.
 TEST_F(Dhcp4ParserTest, poolOutOfSubnet) {
@@ -1043,7 +1168,7 @@ TEST_F(Dhcp4ParserTest, poolOutOfSubnet) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.4.0/28\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.4.0/28\" } ],"
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         "\"valid-lifetime\": 4000 }";
 
@@ -1068,7 +1193,7 @@ TEST_F(Dhcp4ParserTest, poolPrefixLen) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.128/28\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.128/28\" } ],"
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         "\"valid-lifetime\": 4000 }";
 
@@ -1645,7 +1770,7 @@ TEST_F(Dhcp4ParserTest, optionDataDefaults) {
         "    \"csv-format\": False"
         " } ],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\""
         " } ],"
         "\"valid-lifetime\": 4000 }";
@@ -1700,6 +1825,7 @@ TEST_F(Dhcp4ParserTest, optionDataTwoSpaces) {
     // belongs to the 'dhcp4' option space as it is the
     // standard option.
     string config = "{ \"interfaces\": [ \"*\" ],"
+        "\"valid-lifetime\": 4000,"
         "\"rebind-timer\": 2000,"
         "\"renew-timer\": 1000,"
         "\"option-data\": [ {"
@@ -1726,7 +1852,7 @@ TEST_F(Dhcp4ParserTest, optionDataTwoSpaces) {
         "    \"encapsulate\": \"\""
         " } ],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\""
         " } ]"
         "}";
@@ -1779,6 +1905,7 @@ TEST_F(Dhcp4ParserTest, optionDataEncapsulate) {
 
     // Starting stage 1. Configure sub-options and their definitions.
     string config = "{ \"interfaces\": [ \"*\" ],"
+        "\"valid-lifetime\": 4000,"
         "\"rebind-timer\": 2000,"
         "\"renew-timer\": 1000,"
         "\"option-data\": [ {"
@@ -1879,7 +2006,7 @@ TEST_F(Dhcp4ParserTest, optionDataEncapsulate) {
         "    \"encapsulate\": \"\""
         " } ],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\""
         " } ]"
         "}";
@@ -1934,7 +2061,7 @@ TEST_F(Dhcp4ParserTest, optionDataInSingleSubnet) {
         "      \"csv-format\": False"
         " } ],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\", "
         "    \"option-data\": [ {"
         "          \"name\": \"dhcp-message\","
@@ -2081,7 +2208,7 @@ TEST_F(Dhcp4ParserTest, optionDataInMultipleSubnets) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\":  \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\", "
         "    \"option-data\": [ {"
         "          \"name\": \"dhcp-message\","
@@ -2092,7 +2219,7 @@ TEST_F(Dhcp4ParserTest, optionDataInMultipleSubnets) {
         "        } ]"
         " },"
         " {"
-        "    \"pool\": [ \"192.0.3.101 - 192.0.3.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.3.101 - 192.0.3.150\" } ],"
         "    \"subnet\": \"192.0.3.0/24\", "
         "    \"option-data\": [ {"
         "          \"name\": \"default-ip-ttl\","
@@ -2352,6 +2479,7 @@ TEST_F(Dhcp4ParserTest, stdOptionDataEncapsulate) {
     // that we will add to the base option.
     // Let's create some dummy options: foo and foo2.
     string config = "{ \"interfaces\": [ \"*\" ],"
+        "\"valid-lifetime\": 4000,"
         "\"rebind-timer\": 2000,"
         "\"renew-timer\": 1000,"
         "\"option-data\": [ {"
@@ -2447,7 +2575,7 @@ TEST_F(Dhcp4ParserTest, stdOptionDataEncapsulate) {
         "    \"encapsulate\": \"\""
         " } ],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\""
         " } ]"
         "}";
@@ -2512,6 +2640,7 @@ TEST_F(Dhcp4ParserTest, vendorOptionsHex) {
     // sharing the code 1 and belonging to the different vendor spaces.
     // (different vendor-id values).
     string config = "{ \"interfaces\": [ \"*\" ],"
+        "\"valid-lifetime\": 4000,"
         "\"rebind-timer\": 2000,"
         "\"renew-timer\": 1000,"
         "\"option-data\": [ {"
@@ -2529,7 +2658,7 @@ TEST_F(Dhcp4ParserTest, vendorOptionsHex) {
         "    \"csv-format\": False"
         " } ],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1-192.0.2.10\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1-192.0.2.10\" } ],"
         "    \"subnet\": \"192.0.2.0/24\""
         " } ]"
         "}";
@@ -2570,6 +2699,7 @@ TEST_F(Dhcp4ParserTest, vendorOptionsCsv) {
     // sharing the code 1 and belonging to the different vendor spaces.
     // (different vendor-id values).
     string config = "{ \"interfaces\": [ \"*\" ],"
+        "\"valid-lifetime\": 4000,"
         "\"rebind-timer\": 2000,"
         "\"renew-timer\": 1000,"
         "\"option-data\": [ {"
@@ -2589,7 +2719,7 @@ TEST_F(Dhcp4ParserTest, vendorOptionsCsv) {
         "    \"encapsulate\": \"\""
         " } ],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\":  \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\" "
         " } ]"
         "}";
@@ -2646,6 +2776,7 @@ buildHooksLibrariesConfig(const std::vector<std::string>& libraries) {
     // Append the remainder of the configuration.
     config += string(
         "],"
+        "\"valid-lifetime\": 4000,"
         "\"rebind-timer\": 2000,"
         "\"renew-timer\": 1000,"
         "\"option-data\": [ {"
@@ -2672,7 +2803,7 @@ buildHooksLibrariesConfig(const std::vector<std::string>& libraries) {
         "    \"encapsulate\": \"\""
         " } ],"
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\""
         " } ]"
         "}");
@@ -2764,6 +2895,8 @@ TEST_F(Dhcp4ParserTest, LibrariesSpecified) {
 // This test verifies that it is possible to select subset of interfaces
 // on which server should listen.
 TEST_F(Dhcp4ParserTest, selectedInterfaces) {
+    IfaceMgrTestConfig test_config(true);
+
     ConstElementPtr x;
     string config = "{ \"interfaces\": [ \"eth0\", \"eth1\" ],"
         "\"rebind-timer\": 2000, "
@@ -2776,24 +2909,26 @@ TEST_F(Dhcp4ParserTest, selectedInterfaces) {
 
     // Make sure the config manager is clean and there is no hanging
     // interface configuration.
-    ASSERT_FALSE(CfgMgr::instance().isActiveIface("eth0"));
-    ASSERT_FALSE(CfgMgr::instance().isActiveIface("eth1"));
-    ASSERT_FALSE(CfgMgr::instance().isActiveIface("eth2"));
+    EXPECT_FALSE(test_config.socketOpen("eth0", AF_INET));
+    EXPECT_FALSE(test_config.socketOpen("eth1", AF_INET));
 
     // Apply configuration.
     EXPECT_NO_THROW(status = configureDhcp4Server(*srv_, json));
     ASSERT_TRUE(status);
     checkResult(status, 0);
 
+    CfgMgr::instance().getConfiguration()->cfg_iface_.openSockets(10000);
+
     // eth0 and eth1 were explicitly selected. eth2 was not.
-    EXPECT_TRUE(CfgMgr::instance().isActiveIface("eth0"));
-    EXPECT_TRUE(CfgMgr::instance().isActiveIface("eth1"));
-    EXPECT_FALSE(CfgMgr::instance().isActiveIface("eth2"));
+    EXPECT_TRUE(test_config.socketOpen("eth0", AF_INET));
+    EXPECT_TRUE(test_config.socketOpen("eth1", AF_INET));
 }
 
 // This test verifies that it is possible to configure the server in such a way
 // that it listens on all interfaces.
 TEST_F(Dhcp4ParserTest, allInterfaces) {
+    IfaceMgrTestConfig test_config(true);
+
     ConstElementPtr x;
     // This configuration specifies two interfaces on which server should listen
     // but it also includes asterisk. The asterisk switches server into the
@@ -2809,19 +2944,19 @@ TEST_F(Dhcp4ParserTest, allInterfaces) {
     ConstElementPtr status;
 
     // Make sure there is no old configuration.
-    ASSERT_FALSE(CfgMgr::instance().isActiveIface("eth0"));
-    ASSERT_FALSE(CfgMgr::instance().isActiveIface("eth1"));
-    ASSERT_FALSE(CfgMgr::instance().isActiveIface("eth2"));
+    ASSERT_FALSE(test_config.socketOpen("eth0", AF_INET));
+    ASSERT_FALSE(test_config.socketOpen("eth1", AF_INET));
 
     // Apply configuration.
     EXPECT_NO_THROW(status = configureDhcp4Server(*srv_, json));
     ASSERT_TRUE(status);
     checkResult(status, 0);
 
+    CfgMgr::instance().getConfiguration()->cfg_iface_.openSockets(10000);
+
     // All interfaces should be now active.
-    EXPECT_TRUE(CfgMgr::instance().isActiveIface("eth0"));
-    EXPECT_TRUE(CfgMgr::instance().isActiveIface("eth1"));
-    EXPECT_TRUE(CfgMgr::instance().isActiveIface("eth2"));
+    ASSERT_TRUE(test_config.socketOpen("eth0", AF_INET));
+    ASSERT_TRUE(test_config.socketOpen("eth1", AF_INET));
 }
 
 // This test checks the ability of the server to parse a configuration
@@ -2840,7 +2975,7 @@ TEST_F(Dhcp4ParserTest, d2ClientConfig) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         " \"dhcp-ddns\" : {"
         "     \"enable-updates\" : true, "
@@ -2905,7 +3040,7 @@ TEST_F(Dhcp4ParserTest, invalidD2ClientConfig) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\" } ],"
         " \"dhcp-ddns\" : {"
         "     \"enable-updates\" : true, "
@@ -2951,7 +3086,7 @@ TEST_F(Dhcp4ParserTest, subnetRelayInfo) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"renew-timer\": 1, "
         "    \"rebind-timer\": 2, "
         "    \"valid-lifetime\": 4,"
@@ -2982,22 +3117,22 @@ TEST_F(Dhcp4ParserTest, classifySubnets) {
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet4\": [ { "
-        "    \"pool\": [ \"192.0.2.1 - 192.0.2.100\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
         "    \"subnet\": \"192.0.2.0/24\", "
         "    \"client-class\": \"alpha\" "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.3.101 - 192.0.3.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.3.101 - 192.0.3.150\" } ],"
         "    \"subnet\": \"192.0.3.0/24\", "
         "    \"client-class\": \"beta\" "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.4.101 - 192.0.4.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.4.101 - 192.0.4.150\" } ],"
         "    \"subnet\": \"192.0.4.0/24\", "
         "    \"client-class\": \"gamma\" "
         " },"
         " {"
-        "    \"pool\": [ \"192.0.5.101 - 192.0.5.150\" ],"
+        "    \"pools\": [ { \"pool\": \"192.0.5.101 - 192.0.5.150\" } ],"
         "    \"subnet\": \"192.0.5.0/24\" "
         " } ],"
         "\"valid-lifetime\": 4000 }";

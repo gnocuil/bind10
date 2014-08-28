@@ -15,8 +15,8 @@
 /**
  @page dhcp4 DHCPv4 Server Component
 
-BIND10 offers DHCPv4 server implementation. It is implemented as
-b10-dhcp4 component.  Its primary code is located in
+Kea offers DHCPv4 server implementation. It is implemented as
+kea-dhcp4 component.  Its primary code is located in
 isc::dhcp::Dhcpv4Srv class. It uses \ref libdhcp extensively,
 especially isc::dhcp::Pkt4, isc::dhcp::Option and
 isc::dhcp::IfaceMgr classes. Currently this code offers skeleton
@@ -29,9 +29,12 @@ DHCPv4 server component does not support direct traffic (relayed
 only), as support for transmission to hosts without IPv4 address
 assigned is not implemented in IfaceMgr yet.
 
-@section dhcpv4Session BIND10 message queue integration
+@section dhcpv4Session Bundy message queue integration
 
-DHCPv4 server component is now integrated with BIND10 message queue.
+DHCPv4 server now has two configuration backends: JSON and Bundy. The
+following section applies only to the Bundy backend.
+
+DHCPv4 server component is now integrated with Bundy message queue.
 The integration is performed by establishSession() and disconnectSession()
 functions in isc::dhcp::ControlledDhcpv4Srv class. main() method defined
 in the src/bin/dhcp4/main.cc file instantiates isc::dhcp::ControlledDhcpv4Srv
@@ -99,19 +102,19 @@ client. In this case the server will return one of the DHCPv4 Client FQDN or
 Host Name %Option in its response with the name which was selected for the
 client to indicate that this name will be used to perform DNS update.
 
-The b10-dhcp-ddns process is responsible for the actual communication with the
-DNS, i.e. to send DNS update messages. The b10-dhcp4 module is responsible for
+The kea-dhcp-ddns process is responsible for the actual communication with the
+DNS, i.e. to send DNS update messages. The kea-dhcp4 module is responsible for
 generating @ref isc::dhcp_ddns::NameChangeRequest and sending it to
-the b10-dhcp-ddns module. The @ref isc::dhcp_ddns::NameChangeRequest object
+the kea-dhcp-ddns module. The @ref isc::dhcp_ddns::NameChangeRequest object
 represents changes to the DNS bindings, related to acquisition, renewal or
-release of the DHCP lease. The b10-dhcp4 module implements the simple FIFO queue
+release of the DHCP lease. The kea-dhcp4 module implements the simple FIFO queue
 of the NameChangeRequest objects. The module logic, which processes the incoming
 DHCPv4 Client FQDN and Host Name Options puts these requests into the FIFO queue.
 
 @todo Currently the FIFO queue is not processed after the NameChangeRequests are
 generated and added to it. In the future implementation steps it is planned to
 create a code which will check if there are any outstanding requests in the queue
-and send them to the b10-dhcp-ddns module when server is idle waiting for DHCP
+and send them to the kea-dhcp-ddns module when server is idle waiting for DHCP
 messages.
 
 When client gets an address from the server, a DHCPv4 server may generate 0, 1
@@ -121,10 +124,10 @@ update for any other reason.
 
 Server may generate 1 NameChangeRequest in a case when client acquired a new
 lease or it releases an existing lease. In the former case, the NameChangeRequest
-type is CHG_ADD, which indicates that the b10-dhcp-ddns module should add a new
+type is CHG_ADD, which indicates that the kea-dhcp-ddns module should add a new
 DNS binding for the client, and it is assumed that there is no DNS binding for
 this client already. In the latter case, the NameChangeRequest type is CHG_REMOVE
-to indicate to the b10-dhcp-ddns module that an existing DNS binding should be
+to indicate to the kea-dhcp-ddns module that an existing DNS binding should be
 removed from the DNS. The binding consists of the forward and reverse mapping.
 The server may only remove the mapping which it had added. Therefore, the lease
 database holds the information which updates (no update, reverse only update,
@@ -190,6 +193,77 @@ accessible to clients that belong to a given class. That is implemented as isc::
 being passed in isc::dhcp::Dhcpv4Srv::selectSubnet() to isc::dhcp::CfgMgr::getSubnet4().
 Currently this capability is usable, but the number of scenarios it supports is
 limited.
+
+ @section dhcpv4ConfigBackend Configuration backend for DHCPv4
+
+There are many theoretical ways in which server configuration can be stored. Kea 0.8 and
+earlier versions used BIND10/Bundy framework and its internal storage for DHCPv6 server configuration.
+The legacy ISC-DHCP implementation uses flat files. Configuration stored in JSON files is
+becoming more and more popular among various projects. There are unofficial patches for
+ISC-DHCP that keep parts of the configuration in LDAP. It was also suggested that in some
+cases it would be convenient to keep configuration in XML files.
+
+Kea 0.9 introduces configuration backends that are switchable during compilation phase.
+There is a new parameter for configure script: --with-kea-config. It currently supports
+two values: BUNDY and JSON.
+
+BUNDY (which is the default value as of May 2014) means that Kea4 is linked with the
+Bundy (former BIND10) configuration backend that connects to the Bundy/BIND10 framework and in general works
+exactly the same as Kea 0.8 and earlier versions. The benefits of that backend are uniform
+integration with Bundy/BIND10 framework, easy on-line reconfiguration using bindctl, available
+RESTful API. On the other hand, it requires the whole heavy Bundy framework that requires
+Python3 to be present. That framework is going away with the release of Kea 0.9.
+
+JSON is a new configuration backend that causes Kea to read JSON configuration file from
+disk. It does not require any framework and thus is considered more lightweight. It will
+allow dynamic on-line reconfiguration, but will lack remote capabilities (i.e. no RESTful
+API). This configuration backend is expected to be the default for upcoming Kea 0.9. It
+requires <tt> -c config-file </tt> command-line option.
+
+Internally, configuration backends are implemented as different implementations of the
+isc::dhcp::ControlledDhcpv4Srv class, stored in {kea,bundy}_controller.cc files. Depending on
+the choice made by ./configure script, only one of those files is compiled and linked.
+There are backend specific tests in src/bin/dhcp4/tests/{kea,bundy}_controller_unittest.cc.
+Only tests specific to selected backend are linked and executed during make distcheck.
+
+While it is unlikely that ISC will support more than one backend at any given time, there
+are several aspects that make that approach appealing in the long term. First, having
+two backends is essential during transition time, where both old and new backend is used.
+Second, there are external organizations that develop and presumably maintain LDAP backend
+for ISC-DHCP. Is at least possible that similar will happen for Kea. Finally, if we ever
+extend the isc::dhcp::CfgMgr with configuration export, this approach could be used as
+a migration tool.
+
+@section dhcpv4SignalBasedReconfiguration Reconfiguring DHCPv4 server with SIGHUP signal
+
+Online reconfiguration (reconfiguration without a need to restart the server) is an
+important feature which is supported by all modern DHCP servers. When using the JSON
+configuration backend, a configuration file name is specified with a command line
+option of the DHCP server binary. The configuration file is used to configure the
+server at startup. If the initial configuration fails, the server will fail to start.
+If the server starts and configures successfully it will use the initial configuration
+until it is reconfigured.
+
+The reconfiguration request can be triggered externally (from other process) by editing
+a configuration file and sending a SIGHUP signal to DHCP server process. After receiving
+the SIGHUP signal, the server will re-read the configuration file specified at startup.
+If the reconfiguration fails, the server will continue to run and use the last good
+configuration.
+
+The signal handler for SIGHUP (also for SIGTERM and SIGINT) are installed in the
+kea_controller.cc using the @c isc::util::SignalSet class. The
+@c isc::dhcp::Dhcp6Srv calls @c isc::dhcp::Daemon::handleSignal on each pass
+through the main loop. This method fetches the last received signal and calls
+a handler function defined in the kea_controller.cc. The handler function
+calls a static function @c configure defined in the kea_controller.cc.
+
+In order for the signal handler to know the location of the configuration file
+(specified at process startup), the location of this file needs to be stored
+in a static variable so as it may be directly accessed by the signal handler.
+This static variable is stored in the @c dhcp::Daemon class and all Kea processes
+can use it (all processes derive from this class). The configuration file
+location is initialized when the @c Daemon::init method is called. Therefore,
+derived classes should call it in their implementations of the @c init method.
 
 @section dhcpv4Other Other DHCPv4 topics
 

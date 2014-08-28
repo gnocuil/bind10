@@ -1,3 +1,303 @@
+833.	[bug]		jiri
+	Compilation fix for PostgreSQL on i686. Thanks to Jiri Popelka
+	from RedHat for providing a patch!
+	(Trac #3532, git 96a06654f2177444dcea3a0e9f6fa06947855497)
+
+832.	[func]		marcin
+	DHCP servers check if the interfaces specified in the configuration,
+	to be used to receive DHCP messsages, are present in the system.
+	If the interface doesn't exist, an error is reported. In addition,
+	the SO_REUSEPORT flag is set for IPv6 sockets as multiple multicast
+	sockets can be bound to the DHCPv6 server port.
+	(Trac #3512, git 5cbbab2d01c6e1bf6d563ba64d80bc6bc857f73d)
+
+831.	[bug]		marcin
+	Kea deamons report configuration summary when the configuration is
+	completed successfully.
+	(Trac #3477, git af2f91d2583b37d69c86fbc4eed29489c6fb8a12)
+
+830.	[build]		jreed
+	The configure script no longer requires pkg-config.
+	(Trac #3511, git 99a5a2db8c011b358873d485ac48f7c78ac6374c)
+
+829.    [build]         wlodek
+	Lettuce DNS tests removed with all related python code,
+	most of them will be used in Forge project which can be found
+	http://kea.isc.org/wiki/IscForge
+	(Trac #3420, git e51bcbeedbc169050751c1b896726965243667be)
+
+828.	[bug]		marcin
+	Corrected the IfaceMgrTest.detectIface unit test that failed on
+	Linux systems with virtual interfaces present.
+	(Trac #3527, git 7aa01a6965b6e9fc39ff005803cada7f58f2e628)
+
+827.	[build]		jiri, tomek
+	Deprecated AC_PROG_LIBTOOL macro replaced by LT_INIT. Thanks to
+	Jiri Popelka from RedHat for providing a patch!
+	(Trac #3525, git 6c0aacf29fae1d0501ca69ff6324df8d4fc8c7ee)
+
+826.	[bug]		jiri, tomek
+	Compilation fix for Red Hat running on armv7. Thanks to Jiri
+	Popelka from RedHat for providing a patch!
+	(Trac #3526, git eac5a80472dcb78b538c2ed34cc0534f801e5145)
+
+825.	[bug]		jiri, tomek
+	Example JSON configuration files permission fix. Thanks to Jiri
+	Popelka	from RedHat for providing a patch!
+	(Trac #3524, git 822a39ba33870f70787a1f666aed772e06d04d79)
+
+824.	[bug]		marcin
+	Kea deamons report configuration summary when the configuration is
+	applied successfully.
+	(Trac #3477, git f39d208024f720f72c931016cfa50a54e80f8c61)
+
+823.	[build]		tomek
+	query_cmp tool removed from the source code.
+	(Trac #3509, git f61c800059bd5e5c74e435d7dd97ae561d29151a)
+
+822.	[build]		tomek
+	'host' program was removed from examples.
+	(Trac #3421, git aeea893fb1c52d20258929a62a59ae2e7bd12e3d)
+
+821.	[bug]		marcin
+	DHCP servers no longer log an error when Interface Manager fails to
+	receive a packet as a result of signal being received.
+	(Trac #3478, git d80c83aef8e103dd483234429d35aeb66149e0b9)
+
+820.	[bug]		marcin
+	Corrected the IfaceMgrTest.detectIfaces unit test which reported
+	false positives for specific network configurations.
+	(Trac #3517, git 9affa1b2210f5cc9d7a99724e5d5c8979409cefd)
+
+Kea 0.9beta1 released on August 13, 2014
+
+819.	[build]		marcin
+	Renamed variables in the configure.ac so as their names do not
+	refer to BIND10 project. As a result of renaming the B10_CXXFLAGS
+	to KEA_CXXFLAGS in configure.ac all dependent Makefiles had to
+	be updated in the tree. The AX_BOOST_FOR_BIND10 macro has been
+	renamed to AX_BOOST_FOR_KEA.
+	(Trac #3507, git 6616b1c0ad0a78e11bca9395fafb8efdba8d8b9c)
+
+818.	[func]		tomek
+	DHCPv4, DHCPv6 and DDNS components now report their versions.
+	(Trac #3508, git 3f46c74ffa0ea1197e1fa62cb2f6580931be35f3)
+
+817.	[bug]		marcin
+	DHCPv4 and DHCPv6 servers will log an error during an attempt to
+	open socket on the interface which is down or not configured.
+	(Trac #3487, git fadc776914aa858ce637aab1513ab3d87631f612)
+
+816.	[doc]		tomek
+	AUTHORS file rewritten.
+	(Trac #3469, git 6ef55abaa1ef79e09ad332c0da28dee7bfed70fe)
+
+815.	[func]		tomek
+	Pool definitions in DHCPv4 and DHCPv6 are now lists of
+	structures. This makes adding new per-pool parameters easier in
+	the future.
+	(Trac #3464, git 4bd0c0eda9d86608f8802d28bd360239fe88e905)
+
+814.	[func,doc]		tomek
+	It is now possible to specify logging parameters in a
+	configuration file for DHCPv4, DHCPv6 and DHCP-DDNS components.
+	(Trac #3427, git 23285903645c36fc35c6866a74c50c74089cd255)
+
+813.	[func]		tomek
+	Functions, methods and variables referring to BIND10 were renamed
+	to Kea. In particular, system variables (B10_LOGGER_ROOT,
+	B10_LOCKFILE_DIR_FROM_BUILD etc.) were renamed. B10_ prefix was
+	replaced with KEA_.
+	(Trac #3417, git 1db8988de6af435fa388dc9c7f909c4a004a01d0)
+
+812.	[doc]		tomek
+	DHCPv6 and DDNS sections in Kea Administrator Reference Manual
+	has been updated. Usage of keactl has been documented.
+	(Trac #3468, git 3945fc6211bcadb9bece7147039a6b50ebcf936b)
+	(Trac #3466, git fa9570d19c73cbe7effc75589b7eb855c411f6a3)
+
+811.	[doc]		tmark
+	Added documentation of message protocol between DHCP servers and the
+	DHCP-DDNS process.
+	(Trac #3505, git 6d9aed2f8fe181714e8260493c6cc06e13d0edd0)
+
+810.	[func]		stephen
+	perfdhcp is now installed in sbin as it requires root privilege
+	to run. The perfdhcp source has been moved to the directory
+	src/bin/perfdhcp.
+	(Trac #3481, git d101aed6156a993476fa1164f0b0ec8395f5886c)
+
+809.	[func]		stephen
+	sockcreator is no longer built or installed.  The code is being
+	retained in the repository for the moment, but may be deleted at
+	some point in the future.
+	(Trac #3480, git 2a55a469dde8fcc053b49e287c30d0906baa91b4)
+
+808.	[func]		stephen
+	Reduced number of startup and shutdown messages in the
+	DHCP-DDNS process by making some of them debug messages.
+	(Trac #3479, git bca0bae285de9ce904c0afd21af777dac2edb4e6)
+
+807.	[func]		marcin
+	DHCPv6 server responds to Confirm messages from clients.
+	(Trac #3269, git 4f43c309a994e30c07f5aa27057552fb195ec284)
+
+806.	[func]		marcin
+	DHCPv4 server processes Requested IP Address option (50).
+	(Trac #3320, git ad411a177a32bbe6a93f4baf813d985558c99e2f)
+
+805.	[func]		stephen
+	Changed all occurrences of "BIND 10" in message files to "Kea".
+	(Trac #3416, git e88090b57a75424920d9b96efbf50e3554048828)
+
+804.	[func]		marcin
+	DHCPv4 server supports DHCPINFORM messages from the clients.
+	(Trac #3390, git 77f8577b1dbb52bdc6deb8bed3eef6ce7abc33fd)
+
+803.	[func]		marcin
+	DHCPv4 server supports responding to directly connected clients on
+	FreeBSD, NetBSD and OpenBSD using Berkeley Packet Filtering. This
+	also resolves the problem reported in #3438 that the server doesn't
+	pick the correct interface to respond to the client and the client
+	never gets the response from the server.
+	(Trac #2893, git 9fba39d93b9ece950c4294230984d6315dfa11f6)
+
+802.	[doc]		tomek, marcin
+	Developer's Guide updated to Change BIND 10 references to Kea.
+	Documentation for Keactrl added.
+	(Trac #3396, git 271450edbc63e9022f877c9aa3d1dc290708f151)
+	(Trac #3466, git fa9570d19c73cbe7effc75589b7eb855c411f6a3)
+
+801.	[build]		fdupont
+	Detect all OS X versions more recent than 10.9 (where
+	pthread_cond_destroy() doesn't work as documented,
+	which makes some of unit tests to fail).
+	(Trac #3473, git d620ef6659598bcc1f4c30241e845348770e264e)
+
+800.	[bug]		marcin
+	DHCPv6 server is now usable on FreeBSD, NetBSD and OpenBSD systems.
+	It can receive messages sent to ff02::1:2 multicast address. Also,
+	fixed the bug whereby the DHCPv6 server failed to bind the socket
+	to global unicast address on BSD systems due to invalid scope id
+	setting.
+	(Trac #3437, git f4c2fe2fc37a37f1510e138e1f6c4ccd757e1f06)
+
+799.	[func]		tmark
+	Configuration parsing for all Kea servers has been enhanced to include
+	the location of the error within the configuration file presented as
+	file name, line number, and column within the configuration file.
+	(Trac #3436, git b927deb2b4579f93ba74d4be8f5a3a4eaa3c6422)
+	(Trac #3409, git 777dbdb29a641f7d8661f9cc2c22f1cb9fe7eb14)
+
+798.	[build]		tomek
+	JSON configuration backend is now the default. BUNDY backend
+	is now deprecated after #3413 removed the BIND10/Bundy framework.
+	(Trac #3476, git 727b65f2c62bbd7dc599b2e7956167e2b3c34098)
+
+797.	[build]		tomek
+	Removed a lot of remaining BIND10 framework: bind10, bindctl,
+	cfgmgr, cmdctl, msgq, stats, sysinfo, tests, usermgr from src/bin
+	directory, also src/lib/python directory. Python3 is not
+	required anymore, unless documentation generation is enabled.
+	(Trac #3413, git d7b297ac475193f687d07b0489ac74585d4f3814)
+
+796.	[doc]		tomek
+	User's Guide renamed to Kea Administrator Reference Manual,
+	removed sections specific to BIND10/Bundy framework, rewritten
+	general and DHCPv4 specific examples.
+	(Trac #3418, git 73e6019d83760f0500890240e2e187dcd5e1e14c)
+
+795.	[func]		marcin
+	Added support to keactrl to start, stop, reconfigure and gather
+	status of the DHCP-DDNS server.
+	(Trac #3465, git 6bc61470c9ccee001fe282d0f879bcddac0b8721)
+
+794.	[func]		fdupont
+	cryptolink: add OpenSSL crypto backend as an alternative to Botan
+	by specifying --with-openssl[=PATH] on the "configure" command
+	line. Add hash support to the cryptolink API and use it in DHCP
+	DDNS, removing the Botan dependency.
+	(Trac #2406, git 4b4110dd68706b4171fc6d8a6f4f2a9cd820edac)
+
+793.	[func]		tmark
+	DHCP-DDNS: Implemented dynamic reconfiguration of the server,
+	triggered when the SIGHUP signal is received by the server's
+	process. Also, server performs a graceful shut down when SIGINT
+	or SIGTERM signal is received.
+	(Trac #3407, git f1a224df1e46098748ba60205be09ada4600515f)
+
+792.	[func]		marcin
+	Implemented keactrl script used to start, stop, reconfigure Kea
+	servers and get their status and configuration data. This script
+	is installed only if the JSON configuration backend is in use.
+	(Trac #3422, git e1d164c7a9a54a7aacea88c8c57cd2826e06012b)
+
+791.	[func]		tmark
+	DHCP-DDNS: Now supports configure.ac parameter: --with-kea-config.
+	It allows selecting configuration backend and accepts one of two
+	values: BUNDY, which uses Bundy (former BIND10) framework as Kea
+	0.8 did, or JSON, which reads configuration from a JSON file.
+	(Trac #3401, git 8e69209caafc81041229f3d9601599f3d98fc86e)
+
+790.	[func]		marcin
+	DHCPv4 server: Implemented dynamic reconfiguration of the server,
+	triggered when the SIGHUP signal is received by the server's
+	process. Also, server performs a graceful shut down when SIGINT
+	or SIGTERM signal is received.
+	(Trac #3405, git dd0270bd91cf8fc958b8b388950d343d311ee99e)
+
+789.	[bug]		marcin
+	DHCPv4 server sends Renewal Time (58) and Rebinding Time (59)
+	options to the client when the appropriate timers are set
+	in the configuration. Previously, the timers were ignored.
+	(Trac #3336, git b3c8a079889411182ade517c85aa4fe5d6b8719a)
+
+788.	[func]		tomek
+	DHCPv4 server: New parameter added to configure.ac: --with-kea-config.
+	It allows selecting configuration backend and accepts one of two
+	values: BUNDY, which uses Bundy (former BIND10) framework as Kea
+	0.8 did, or JSON, which reads configuration from a JSON file.
+	(Trac #3399, git 6e4dd3ae58c091ba0fd64c87fa8d7c268210f99b)
+
+787.	[func]		marcin
+	DHCPv6 server: Implemented dynamic reconfiguration of the server,
+	triggered when the SIGHUP signal is received by the server's
+	process. Also, server performs a graceful shut down when SIGINT
+	or SIGTERM signal is received.
+	(Trac #3406, git 3be60fa6ac521aecae6ae92d26dc03792bc76903)
+
+786.	[func]		tmark
+	DHCP-DDNS now supports DDNS updates with TSIG.  Please refer to the
+	Kea Guide for details. Prior to this TSIG keys could be defined but
+	were not used.
+	(Trac #3432, git 80fea12a53d1e832d4e7b710ca6ea613300f73ea)
+
+785.	[bug]		marcin
+	DHCPv6 server avoids collisions between prefixes that are allocated
+	as a result of receiving hints from the clients. Previously the
+	whole prefix (including bits beyond the prefix length) was used to
+	search existing leases in the lease database. If not found, the
+	new lease was crated for the prefix sent by the client. If another
+	client sent the same prefix but with different non-significant bits
+	the prefix was allocated. This led to prefix collisions. Currently,
+	server ignores bits beyond the prefix length when searching for
+	existing leases.
+	(Trac #3246, git 50de7df4195195e981ae9c8c6f1b4100047d5bb5)
+
+784.	[func]		tmark
+	DHCP_DDNS's configuration was changed. The unused parameter,
+	"interface" was deleted.  Three new parameters, "ncr_protocol",
+	"ncr_format", and "dns_server_timeout" were added.  Please refer to
+	Kea Guide for details.
+	(Trac #3268,    git bd60252e679f19b062f61926647f661ab169f21c)
+
+783.	[func]*		tomek
+	DHCPv6 server: New parameter added to configure: --with-kea-config.
+	It allows selecting configuration backend and accepts one of two
+	values: BUNDY, which uses Bundy (former BIND10 framework as Kea
+	0.8 did, or JSON, which reads configuration from a JSON file.
+	(Trac #3400, git 7e9fdfa644b81f72bfa5300b7ddcdb9754400769)
+
 782.	[func]		tmark
 	Added sender-ip, sender-port, and max-queue-size parameters to
 	the dhcp-ddns configuration section of both b10-dhcp4 and b10-dhcp6.
@@ -22,6 +322,8 @@
 	Added a section to the developer's guide for Kea's DHCP-DDNS
 	component, D2.
 	(Trac #3158,    git  7be263c7372b1401a8b4288742854f96b5bec0d6)
+
+bind10-1.2.0 (kea 0.8) released on April 17, 2014
 
 bind10-1.2.0rc1 released on April 8, 2014
 

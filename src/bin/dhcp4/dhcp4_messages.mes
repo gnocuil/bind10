@@ -21,11 +21,11 @@ Interface Manager starts up procedure of opening sockets.
 
 % DHCP4_CCSESSION_STARTED control channel session started on socket %1
 A debug message issued during startup after the DHCPv4 server has
-successfully established a session with the BIND 10 control channel.
+successfully established a session with the Kea control channel.
 
 % DHCP4_CCSESSION_STARTING starting control channel session, specfile: %1
 This debug message is issued just before the DHCPv4 server attempts
-to establish a session with the BIND 10 control channel.
+to establish a session with the Kea control channel.
 
 % DHCP4_CLASS_ASSIGNED client packet has been assigned to the following class(es): %1
 This debug message informs that incoming packet has been assigned to specified
@@ -42,7 +42,7 @@ name was malformed or due to internal server error.
 
 % DHCP4_COMMAND_RECEIVED received command %1, arguments: %2
 A debug message listing the command (and possible arguments) received
-from the BIND 10 control system by the DHCPv4 server.
+from the Kea control system by the DHCPv4 server.
 
 % DHCP4_CONFIG_COMPLETE DHCPv4 server has completed configuration: %1
 This is an informational message announcing the successful processing of a
@@ -50,10 +50,11 @@ new configuration. It is output during server startup, and when an updated
 configuration is committed by the administrator.  Additional information
 may be provided.
 
-% DHCP4_CONFIG_LOAD_FAIL failed to load configuration: %1
-This critical error message indicates that the initial DHCPv4
-configuration has failed. The server will start, but nothing will be
-served until the configuration has been corrected.
+% DHCP4_CONFIG_LOAD_FAIL configuration error using file: %1, reason: %2
+This error message indicates that the DHCPv4 configuration has failed.
+If this is an initial configuration (during server's startup) the server
+will fail to start. If this is a dynamic reconfiguration attempt the
+server will continue to use an old configuration.
 
 % DHCP4_CONFIG_NEW_SUBNET a new subnet has been added to configuration: %1
 This is an informational message reporting that the configuration has
@@ -64,6 +65,10 @@ This warning message is issued on an attempt to configure multiple options
 with the same option code for a particular subnet. Adding multiple options
 is uncommon for DHCPv4, but is not prohibited.
 
+% DHCP4_CONFIG_RECEIVED received configuration %1
+A debug message listing the configuration received by the DHCPv4 server.
+The source of that configuration depends on used configuration backend.
+
 % DHCP4_CONFIG_START DHCPv4 server is processing the following configuration: %1
 This is a debug message that is issued every time the server receives a
 configuration. That happens at start up and also when a server configuration
@@ -71,14 +76,9 @@ change is committed by the administrator.
 
 % DHCP4_CONFIG_UPDATE updated configuration received: %1
 A debug message indicating that the DHCPv4 server has received an
-updated configuration from the BIND 10 configuration system.
+updated configuration from the Kea configuration system.
 
-% DHCP4_DB_BACKEND_STARTED lease database started (type: %1, name: %2)
-This informational message is printed every time DHCPv4 server is started
-and gives both the type and name of the database being used to store
-lease and other information.
-
-% DHCP4_DDNS_REQUEST_SEND_FAILED failed sending a request to b10-dhcp-ddns, error: %1,  ncr: %2
+% DHCP4_DDNS_REQUEST_SEND_FAILED failed sending a request to kea-dhcp-ddns, error: %1,  ncr: %2
 This error message indicates that DHCP4 server attempted to send a DDNS
 update reqeust to the DHCP-DDNS server.  This is most likely a configuration or
 networking error.
@@ -92,6 +92,14 @@ by the Interface Manager until interface is enabled.
 This error message is logged when the attempt to compute DHCID for a specified
 lease has failed. The lease details and reason for failure is logged in the
 message.
+
+% DHCP4_DYNAMIC_RECONFIGURATION initate server reconfiguration using file: %1, after receiving SIGHUP signal
+This is the info message logged when the DHCPv4 server starts reconfiguration
+as a result of receiving SIGHUP signal.
+
+% DHCP4_DYNAMIC_RECONFIGURATION_FAIL dynamic server reconfiguration failed with file: %1
+This is an error message logged when the dynamic reconfiguration of the
+DHCP server failed.
 
 % DHCP4_EMPTY_HOSTNAME received empty hostname from the client, skipping processing of this option
 This debug message is issued when the server received an empty Hostname option
@@ -140,6 +148,16 @@ point, the setting of the flag instructs the server not to choose a
 subnet, an action that severely limits further processing; the server
 will be only able to offer global options - no addresses will be assigned.
 
+% DHCP4_INIT_FAIL failed to initialize Kea server: %1
+The server has failed to initialize. This may be because the configuration
+was not successful, or it encountered any other critical error on startup.
+Attached error message provides more details about the issue.
+
+% DHCP4_INVALID_ADDRESS_INIT_REBOOT invalid address %1 requested by INIT-REBOOT client (id: %2, hwaddr: %3)
+This debug message is issued when the client being in the INIT-REBOOT state
+requested an address which is not assigned to him. The server will respond
+to this client with DHCPNAK.
+
 % DHCP4_LEASE_ADVERT lease %1 advertised (client client-id %2, hwaddr %3)
 This debug message indicates that the server successfully advertised
 a lease. It is up to the client to choose one server out of othe advertised
@@ -170,7 +188,7 @@ failure.
 
 % DHCP4_NCR_CREATION_FAILED failed to generate name change requests for DNS: %1
 This message indicates that server was unable to generate NameChangeRequests
-which should be sent to the b10-dhcp_ddns module to create
+which should be sent to the kea-dhcp_ddns module to create
 new DNS records for the lease being acquired or to update existing records
 for the renewed lease. The reason for the failure is printed in the logged
 message.
@@ -195,7 +213,7 @@ received message is dropped.
 A debug message issued during startup, this indicates that the DHCPv4
 server is about to open sockets on the specified port.
 
-% DHCP4_OPEN_SOCKET_FAIL failed to create socket: %1
+% DHCP4_OPEN_SOCKET_FAIL failed to open socket: %1
 A warning message issued when IfaceMgr fails to open and bind a socket. The reason
 for the failure is appended as an argument of the log message.
 
@@ -257,7 +275,7 @@ On receipt of message containing details to a change of its configuration,
 the DHCPv4 server failed to create a parser to decode the contents of
 the named configuration element, or the creation succeeded but the parsing
 actions and committal of changes failed.  The message has been output in
-response to a non-BIND 10 exception being raised.  Additional messages
+response to a non-Kea exception being raised.  Additional messages
 may give further information.
 
 % DHCP4_PARSER_FAIL failed to create or run parser for configuration element %1: %2
@@ -320,11 +338,6 @@ A debug message listing the data returned to the client.
 The DHCPv4 server has encountered a fatal error and is terminating.
 The reason for the failure is included in the message.
 
-% DHCP4_SESSION_FAIL failed to establish BIND 10 session (%1), running stand-alone
-The server has failed to establish communication with the rest of BIND
-10 and is running in stand-alone mode.  (This behavior will change once
-the DHCPv4 server is properly integrated with the rest of BIND 10.)
-
 % DHCP4_SHUTDOWN server shutdown
 The DHCPv4 server has terminated normally.
 
@@ -339,17 +352,12 @@ core component within the DHCPv4 server (the Dhcpv4 server object)
 has failed.  As a result, the server will exit.  The reason for the
 failure is given within the message.
 
-% DHCP4_STANDALONE skipping message queue, running standalone
-This is a debug message indicating that the DHCPv4 server is running in
-standalone mode, not connected to the message queue.  Standalone mode
-is only useful during program development, and should not be used in a
-production environment.
-
-% DHCP4_STARTING server starting
+% DHCP4_STARTING Kea DHCPv4 server version %1 starting
 This informational message indicates that the DHCPv4 server has
-processed any command-line switches and is starting.
+processed any command-line switches and is starting. The version
+is also printed.
 
-% DHCP4_START_INFO pid: %1, port: %2, verbose: %3, standalone: %4
+% DHCP4_START_INFO pid: %1, port: %2, verbose: %3
 This is a debug message issued during the DHCPv4 server startup.
 It lists some information about the parameters with which the server
 is running.

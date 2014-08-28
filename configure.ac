@@ -2,7 +2,12 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.59])
-AC_INIT(bind10, 20140313, kea-dev@isc.org)
+
+# For released versions, this is in x.y.z format.
+# For GIT versions, this is x.y.z-git, where x.y.z denotes the software
+# version that was used as a base + changes that were made later, but
+# are not released yet.
+AC_INIT(kea, 0.9-beta1-git, kea-dev@isc.org)
 AC_CONFIG_SRCDIR(README)
 
 # serial-tests is not available in automake version before 1.13, so
@@ -24,6 +29,19 @@ AC_CONFIG_MACRO_DIR([m4macros])
 # Checks for programs.
 AC_PROG_CXX
 
+# Check for exact Kea version.
+AC_MSG_CHECKING(whether this is a tarball or git source)
+if test -d "${srcdir}/.git"; then
+	KEA_SRCID="git `(cd "${top_srcdir}";git rev-parse HEAD)`"
+        AC_MSG_RESULT("git")
+else
+        KEA_SRCID="tarball"
+        AC_MSG_RESULT("tarball")
+fi
+# Export EXTENDED_VERSION to config.h
+# This will be either "tarball" or "git abcd".
+AC_DEFINE_UNQUOTED([EXTENDED_VERSION], ["${KEA_SRCID}"], [Extended Kea version])
+
 # Enable low-performing debugging facilities? This option optionally
 # enables some debugging aids that perform slowly and hence aren't built
 # by default.
@@ -43,7 +61,7 @@ AM_COND_IF([DEBUG_ENABLED], [AC_DEFINE([ENABLE_DEBUG], [1], [Enable low-performi
 
 # libtool cannot handle spaces in paths, so exit early if there is one
 if [ test `echo $PWD | grep -c ' '` != "0"  ]; then
-    AC_MSG_ERROR([BIND 10 cannot be built in a directory that contains spaces, because of libtool limitations. Please change the directory name, or use a symbolic link that does not contain spaces.])
+    AC_MSG_ERROR([Kea cannot be built in a directory that contains spaces, because of libtool limitations. Please change the directory name, or use a symbolic link that does not contain spaces.])
 fi
 
 # On FreeBSD (and probably some others), clang++ does not meet an autoconf
@@ -61,7 +79,7 @@ CFLAGS_SAVED=$CFLAGS
 CXXFLAGS_SAVED=$CXXFLAGS
 CFLAGS="$CFLAGS $CXX_LIBTOOL_LDFLAGS"
 CXXFLAGS="$CXXFLAGS $CXX_LIBTOOL_LDFLAGS"
-AC_PROG_LIBTOOL
+LT_INIT
 CFLAGS=$CFLAGS_SAVED
 CXXFLAGS=$CXXFLAGS_SAVED
 
@@ -74,7 +92,7 @@ AC_CHECK_DECL([__SUNPRO_CC], [SUNCXX="yes"], [SUNCXX="no"])
 AC_CHECK_DECL([__clang__], [CLANGPP="yes"], [CLANGPP="no"])
 AM_CONDITIONAL(USE_CLANGPP, test "X${CLANGPP}" = "Xyes")
 
-dnl Determine if weare using GNU sed
+dnl Determine if we are using GNU sed
 GNU_SED=no
 $SED --version 2> /dev/null | grep GNU > /dev/null 2>&1
 if test $? -eq 0; then
@@ -83,14 +101,13 @@ fi
 
 # Linker options
 
-# check -R, "-Wl,-R" or -rpath (we share the AX function defined in
-#  examples/m4)
+# check -R, "-Wl,-R" or -rpath
 AX_ISC_RPATH
 
 # Compiler dependent settings: define some mandatory CXXFLAGS here.
-# We also use a separate variable B10_CXXFLAGS.  This will (and should) be
+# We also use a separate variable KEA_CXXFLAGS.  This will (and should) be
 # used as the default value for each specific AM_CXXFLAGS:
-# AM_CXXFLAGS = $(B10_CXXFLAGS)
+# AM_CXXFLAGS = $(KEA_CXXFLAGS)
 # AM_CXXFLAGS += ... # add module specific flags
 # We need this so that we can disable some specific compiler warnings per
 # module basis; since AM_CXXFLAGS are placed before CXXFLAGS, and since
@@ -99,23 +116,23 @@ AX_ISC_RPATH
 # "override" the default.
 
 # This may be used to try linker flags.
-AC_DEFUN([BIND10_CXX_TRY_FLAG], [
+AC_DEFUN([KEA_CXX_TRY_FLAG], [
   AC_MSG_CHECKING([whether $CXX supports $1])
 
-  bind10_save_CXXFLAGS="$CXXFLAGS"
+  kea_save_CXXFLAGS="$CXXFLAGS"
   CXXFLAGS="$CXXFLAGS $1"
 
   AC_LINK_IFELSE([AC_LANG_SOURCE([int main(void){ return 0;}])],
-                 [bind10_cxx_flag=yes], [bind10_cxx_flag=no])
-  CXXFLAGS="$bind10_save_CXXFLAGS"
+                 [kea_cxx_flag=yes], [kea_cxx_flag=no])
+  CXXFLAGS="$kea_save_CXXFLAGS"
 
-  if test "x$bind10_cxx_flag" = "xyes"; then
+  if test "x$kea_cxx_flag" = "xyes"; then
     ifelse([$2], , :, [$2])
   else
     ifelse([$3], , :, [$3])
   fi
 
-  AC_MSG_RESULT([$bind10_cxx_flag])
+  AC_MSG_RESULT([$kea_cxx_flag])
 ])
 
 CXX_VERSION="unknown"
@@ -137,22 +154,22 @@ fi
 # on the source code.
 if test "$CLANGPP" = "yes"; then
 CXX_VERSION=`$CXX --version 2> /dev/null | head -1`
-B10_CXXFLAGS="$B10_CXXFLAGS -Qunused-arguments"
+KEA_CXXFLAGS="$KEA_CXXFLAGS -Qunused-arguments"
 fi
 
-BIND10_CXX_TRY_FLAG([-Wno-missing-field-initializers],
+KEA_CXX_TRY_FLAG([-Wno-missing-field-initializers],
 	[WARNING_NO_MISSING_FIELD_INITIALIZERS_CFLAG="-Wno-missing-field-initializers"])
 AC_SUBST(WARNING_NO_MISSING_FIELD_INITIALIZERS_CFLAG)
 
 # gcc specific settings:
 if test "X$GXX" = "Xyes"; then
 CXX_VERSION=`$CXX --version 2> /dev/null | head -1`
-B10_CXXFLAGS="$B10_CXXFLAGS -Wall -Wextra -Wnon-virtual-dtor -Wwrite-strings -Woverloaded-virtual -Wno-sign-compare"
+KEA_CXXFLAGS="$KEA_CXXFLAGS -Wall -Wextra -Wnon-virtual-dtor -Wwrite-strings -Woverloaded-virtual -Wno-sign-compare"
 case "$host" in
 *-solaris*)
 	MULTITHREADING_FLAG=-pthreads
 	# In Solaris, IN6ADDR_ANY_INIT and IN6ADDR_LOOPBACK_INIT need -Wno-missing-braces
-	B10_CXXFLAGS="$B10_CXXFLAGS -Wno-missing-braces"
+	KEA_CXXFLAGS="$KEA_CXXFLAGS -Wno-missing-braces"
 	;;
 *)
 	MULTITHREADING_FLAG=-pthread
@@ -177,7 +194,7 @@ werror_ok=0
 # translation unit.  For these versions we have to disable -Werror.
 if test $with_werror = 1; then
    CXXFLAGS_SAVED="$CXXFLAGS"
-   CXXFLAGS="$CXXFLAGS $B10_CXXFLAGS -Werror"
+   CXXFLAGS="$CXXFLAGS $KEA_CXXFLAGS -Werror"
    AC_MSG_CHECKING(for in-TU anonymous namespace breakage)
    # We use struct, not class, here, because some compilers complain about
    # "unused private members", causing a false positive.
@@ -185,7 +202,7 @@ if test $with_werror = 1; then
    namespace isc {struct Bar {Foo foo_;};} ],,
 	[AC_MSG_RESULT(no)
 	 werror_ok=1
-	 B10_CXXFLAGS="$B10_CXXFLAGS -Werror"],
+	 KEA_CXXFLAGS="$KEA_CXXFLAGS -Werror"],
 	[AC_MSG_RESULT(yes)])
    CXXFLAGS="$CXXFLAGS_SAVED"
 fi
@@ -199,26 +216,20 @@ AC_HELP_STRING([--enable-static-link],
   [build programs with static link [[default=no]]]),
   [enable_static_link=yes], [enable_static_link=no])
 AM_CONDITIONAL(USE_STATIC_LINK, test $enable_static_link = yes)
-AM_COND_IF([USE_STATIC_LINK], [AC_DEFINE([USE_STATIC_LINK], [1], [BIND 10 was statically linked?])])
+AM_COND_IF([USE_STATIC_LINK], [AC_DEFINE([USE_STATIC_LINK], [1], [Was Kea statically linked?])])
 
 # Check validity about some libtool options
 if test $enable_static_link = yes -a $enable_static = no; then
 	AC_MSG_ERROR([--enable-static-link requires --enable-static])
 fi
 if test $enable_shared = no; then
-	AC_MSG_ERROR([BIND 10 requires shared libraries to be built])
+	AC_MSG_ERROR([Kea requires shared libraries to be built])
 fi
-
-# allow configuring without setproctitle.
-AC_ARG_ENABLE(setproctitle-check,
-AC_HELP_STRING([--disable-setproctitle-check],
-  [do not check for python setproctitle module (used to give nice names to python processes)]),
-  setproctitle_check=$enableval, setproctitle_check=yes)
 
 # OS dependent configuration
 SET_ENV_LIBRARY_PATH=no
 ENV_LIBRARY_PATH=LD_LIBRARY_PATH
-bind10_undefined_pthread_behavior=no
+kea_undefined_pthread_behavior=no
 
 case "$host" in
 *-solaris*)
@@ -230,7 +241,7 @@ case "$host" in
 	# Destroying locked mutexes, condition variables being waited
 	# on, etc. are undefined behavior on Solaris, so we set it as
 	# such here.
-	bind10_undefined_pthread_behavior=yes
+	kea_undefined_pthread_behavior=yes
 	;;
 *-apple-darwin*)
 	# Starting with OSX 10.7 (Lion) we must choose which IPv6 API to use
@@ -239,17 +250,19 @@ case "$host" in
 
 	# In OS X 10.9 (and possibly any future versions?) pthread_cond_destroy
 	# doesn't work as documented, which makes some of unit tests fail.
-	# Testing a specific system and version is not a good practice, but
-	# identifying this behavior would be too heavy (running a program
-	# with multiple threads), so this is a compromise.  In general,
-	# it should be avoided to rely on 'osx_version' unless there's no
-	# viable alternative.
-	osx_version=`/usr/bin/sw_vers -productVersion`
-	if [ test $osx_version = "10.9" \
-         -o $osx_version = "10.9.1" \
-         -o $osx_version = "10.9.2" ]; then
-		bind10_undefined_pthread_behavior=yes
-	fi
+        AC_TRY_RUN([
+	#include <Availability.h>
+	int main(void)
+	{
+	#ifdef __MAC_OS_X_VERSION_MIN_REQUIRED
+	#if __MAC_OS_X_VERSION_MIN_REQUIRED < 1090
+	return 1;
+	#else
+	return 0;
+	#endif
+	#endif
+	return 1;
+	}],[kea_undefined_pthread_behavior=yes],[],[])
 
 	# libtool doesn't work perfectly with Darwin: libtool embeds the
 	# final install path in dynamic libraries and our loadable python
@@ -273,7 +286,7 @@ esac
 AM_CONDITIONAL(SET_ENV_LIBRARY_PATH, test $SET_ENV_LIBRARY_PATH = yes)
 AC_SUBST(SET_ENV_LIBRARY_PATH)
 AC_SUBST(ENV_LIBRARY_PATH)
-if [ test $bind10_undefined_pthread_behavior = "yes" ]; then
+if [ test $kea_undefined_pthread_behavior = "yes" ]; then
    AC_DEFINE([HAS_UNDEFINED_PTHREAD_BEHAVIOR], [1], [Does this platform have some undefined pthreads behavior?])
 fi
 
@@ -292,13 +305,13 @@ case "$host" in
 	;;
 esac
 
-m4_define([_AM_PYTHON_INTERPRETER_LIST], [python python3.3 python3.2 python3.1 python3])
+m4_define([_AM_PYTHON_INTERPRETER_LIST], [python python3.4 python3.3 python3.2 python3.1 python3])
 AC_ARG_WITH([pythonpath],
 AC_HELP_STRING([--with-pythonpath=PATH],
   [specify an absolute path to python executable when automatic version check (incorrectly) fails]),
   [python_path="$withval"], [python_path="auto"])
 if test "$python_path" = auto; then
-	AM_PATH_PYTHON([3.1])
+	AM_PATH_PYTHON([3.1],,[PYTHON=no])
 else
 	# Older versions of automake can't handle python3 well.  This is an
 	# in-house workaround for them.
@@ -325,160 +338,12 @@ else
 	AC_SUBST(pkgpyexecdir)
 fi
 
-# We need to store the default pyexecdir in a separate variable so that
-# we can specify in Makefile.am the install directory of various BIND 10
-# python scripts and loadable modules; in Makefile.am we cannot replace
-# $(pyexecdir) using itself, e.g, this doesn't work:
-# pyexecdir = $(pyexecdir)/isc/some_module
-# The separate variable makes this setup possible as follows:
-# pyexecdir = $(PYTHON_SITEPKG_DIR)/isc/some_module
-PYTHON_SITEPKG_DIR=${pyexecdir}
-AC_SUBST(PYTHON_SITEPKG_DIR)
-
-# This will be commonly used in various Makefile.am's that need to generate
-# python log messages.
-PYTHON_LOGMSGPKG_DIR="\$(top_builddir)/src/lib/python/isc/log_messages"
-AC_SUBST(PYTHON_LOGMSGPKG_DIR)
-
-# This is python package paths commonly used in python tests.  See
-# README of log_messages for why it's included.
-# lib/dns/python/.libs is necessary because __init__.py of isc package
-# automatically imports isc.datasrc, which then requires the DNS loadable
-# module.  #2145 should eliminate the need for it.
-COMMON_PYTHON_PATH="\$(abs_top_builddir)/src/lib/python/isc/log_messages:\$(abs_top_builddir)/src/lib/python/isc/cc:\$(abs_top_srcdir)/src/lib/python:\$(abs_top_builddir)/src/lib/python:\$(abs_top_builddir)/src/lib/dns/python/.libs"
-AC_SUBST(COMMON_PYTHON_PATH)
-
-# Check for python development environments
-if test -x ${PYTHON}-config; then
-	PYTHON_INCLUDES=`${PYTHON}-config --includes`
-
-	# Add any '-L..." flags to PYTHON_LDFLAGS.  We first make a copy of
-	# python-config --ldflags, removing any spaces and tabs
-	# between "-L" and its argument (some instances of python-config
-	# insert a space, which would confuse the code below).
-	# Notes: if -L isn't contained at all we can simply skip this process,
-	# so we only go through the flag if it's contained; also, protecting
-	# the output with [] seems necessary for environment to avoid getting
-	# an empty output accidentally.
-	python_config_ldflags=[`${PYTHON}-config --ldflags | ${SED} -ne 's/\([ \t]*-L\)[ ]*\([^ \t]*[ \t]*\)/\1\2/gp'`]
-	for flag in $python_config_ldflags; do
-		flag=`echo $flag | ${SED} -ne 's/^\(\-L.*\)$/\1/p'`
-		if test "X${flag}" != X; then
-			PYTHON_LDFLAGS="$PYTHON_LDFLAGS ${flag}"
-		fi
-	done
-	# on some platforms, ${PYTHON}-config --ldflags doesn't provide a -L
-	# option while having the library under a non trivial directory.
-	# as a workaround we try the "lib" sub directory under the common
-	# prefix for this python.
-	if test -z "${PYTHON_LDFLAGS}"; then
-		PYTHON_LDFLAGS="-L`${PYTHON}-config --prefix`/lib"
-	fi
-else
-	if test "X$PYTHON_INCLUDES" = X -o "X$PYTHON_LDFLAGS" = X; then
-		AC_MSG_WARN([${PYTHON}-config does not exist or is not executable, so we could not detect python development environment.  Your system may require an additional package (e.g. "python3-dev").  Alternatively, if you are sure you have python headers and libraries, define PYTHON_INCLUDES and PYTHON_LDFLAGS and run this script.])
-	fi
-fi
-
-# Some OSes including NetBSD don't install libpython.so in a well known path.
-# To avoid requiring dynamic library path with our python wrapper loadable
-# modules, we embed the path to the modules when possible.  We do this even
-# when the path is known in the common operational environment (e.g. when
-# it's stored in a common "hint" file) for simplicity.
-if test "x$ISC_RPATH_FLAG" != "x"; then
-	python_rpath=
-	for flag in ${PYTHON_LDFLAGS}; do
-		python_rpath="${python_rpath} `echo $flag | ${SED} -ne "s/^\(\-L\)/${ISC_RPATH_FLAG}/p"`"
-	done
-	PYTHON_LDFLAGS="${PYTHON_LDFLAGS} ${python_rpath}"
-fi
-
-AC_SUBST(PYTHON_INCLUDES)
-AC_SUBST(PYTHON_LDFLAGS)
-
-CPPFLAGS_SAVED="$CPPFLAGS"
-CPPFLAGS="$CPPFLAGS ${PYTHON_INCLUDES}"
-AC_CHECK_HEADERS([Python.h],, AC_MSG_ERROR([Missing Python.h]))
-CPPFLAGS="$CPPFLAGS_SAVED"
-
-# Check for python library.  Needed for Python-wrapper libraries.
-LDFLAGS_SAVED="$LDFLAGS"
-LDFLAGS="$LDFLAGS $PYTHON_LDFLAGS"
-python_bin="python${PYTHON_VERSION}"
-AC_CHECK_LIB($python_bin, main, python_lib=$python_bin, python_lib=no)
-if test $python_lib != "no"; then
-	PYTHON_LIB="-l$python_lib"
-fi
-AC_SUBST(PYTHON_LIB)
-LDFLAGS=$LDFLAGS_SAVED
-
-# Python 3.2 changed the return type of internal hash function to
-# Py_hash_t and some platforms (such as Solaris) strictly check for long
-# vs Py_hash_t. So we detect and use the appropriate return type.
-# Remove this test (and associated changes in pydnspp_config.h.in) when
-# we require Python 3.2.
-have_py_hash_t=0
-CPPFLAGS_SAVED="$CPPFLAGS"
-CPPFLAGS=${PYTHON_INCLUDES}
-AC_MSG_CHECKING(for Py_hash_t)
-AC_TRY_COMPILE([#include <Python.h>
-                Py_hash_t h;],,
-    [AC_MSG_RESULT(yes)
-     have_py_hash_t=1],
-    [AC_MSG_RESULT(no)])
-CPPFLAGS="$CPPFLAGS_SAVED"
-HAVE_PY_HASH_T=$have_py_hash_t
-AC_SUBST(HAVE_PY_HASH_T)
-
-# Check for the setproctitle module
-if test "$setproctitle_check" = "yes" ; then
-    AC_MSG_CHECKING(for setproctitle module)
-    if "$PYTHON" -c 'import setproctitle' 2>/dev/null ; then
-        AC_MSG_RESULT(ok)
-    else
-        AC_MSG_RESULT(missing)
-        AC_MSG_WARN([Missing setproctitle python module.
-Use --disable-setproctitle-check to skip this check.
-In this case we will continue, but naming of python processes will not work.])
-    fi
-fi
-
-# (g++ only check)
-# Python 3.2 has an unused parameter in one of its headers. This
-# has been reported, but not fixed as of yet, so we check if we need
-# to set -Wno-unused-parameter.
-if test "X$GXX" = "Xyes" -a "$werror_ok" = 1; then
-	CPPFLAGS_SAVED="$CPPFLAGS"
-	CPPFLAGS=${PYTHON_INCLUDES}
-	CXXFLAGS_SAVED="$CXXFLAGS"
-	CXXFLAGS="$CXXFLAGS $B10_CXXFLAGS -Werror"
-	AC_MSG_CHECKING([whether we need -Wno-unused-parameter for python])
-	AC_TRY_COMPILE(
-		[#include <Python.h>],
-		[],
-		[AC_MSG_RESULT(no)],
-		[
-		CXXFLAGS="$CXXFLAGS -Wno-unused-parameter"
-		AC_TRY_COMPILE([#include <Python.h>],
-		[],
-		[AC_MSG_RESULT(yes)
-		 PYTHON_CXXFLAGS="${PYTHON_CXXFLAGS} -Wno-unused-parameter"
-		 AC_SUBST(PYTHON_CXXFLAGS)
-		],
-		[AC_MSG_ERROR([Can't compile against Python.h.  If you're using MacOS X and have installed Python with Homebrew, see http://kea.isc.org/wiki/SystemNotesMacOSX])]
-                )
-                ]
-	)
-	CXXFLAGS="$CXXFLAGS_SAVED"
-	CPPFLAGS="$CPPFLAGS_SAVED"
-fi
-
 # produce PIC unless we disable shared libraries. need this for python bindings.
 if test $enable_shared != "no" -a "X$GXX" = "Xyes"; then
-   B10_CXXFLAGS="$B10_CXXFLAGS -fPIC"
+   KEA_CXXFLAGS="$KEA_CXXFLAGS -fPIC"
 fi
 
-AC_SUBST(B10_CXXFLAGS)
+AC_SUBST(KEA_CXXFLAGS)
 
 # Checks for libraries.
 
@@ -544,26 +409,6 @@ AC_TRY_COMPILE([
         [AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_SA_LEN, 1, [Define to 1 if sockaddr has a sa_len member, and corresponding sin_len and sun_len])],
         AC_MSG_RESULT(no))
-
-AC_ARG_WITH(pycoverage,
-[  --with-pycoverage[=PROGRAM]         enable python code coverage using the specified coverage], pycoverage="$withval", pycoverage="no")
-if test "$pycoverage" = "no" ; then
-	# just run the tests normally with python
-	PYCOVERAGE_RUN="${PYTHON}"
-	USE_PYCOVERAGE="no"
-elif test "$pycoverage" = "yes" ; then
-	PYCOVERAGE="coverage"
-	PYCOVERAGE_RUN="${PYCOVERAGE} run --branch --append"
-	USE_PYCOVERAGE="yes"
-else
-	PYCOVERAGE="$pycoverage"
-	PYCOVERAGE_RUN="${PYCOVERAGE} run --branch --append"
-	USE_PYCOVERAGE="yes"
-fi
-AM_CONDITIONAL(ENABLE_PYTHON_COVERAGE, test x$USE_PYCOVERAGE != xno)
-AC_SUBST(PYCOVERAGE)
-AC_SUBST(PYCOVERAGE_RUN)
-AC_SUBST(USE_PYCOVERAGE)
 
 enable_gtest="no"
 GTEST_INCLUDES=
@@ -641,6 +486,13 @@ AC_DEFUN([ACX_CHECK_PROG_NONCACHE], [
     IFS="$IFS_SAVED"
 ])
 
+# Avoid checking Botan if OpenSSL is wanted
+AC_ARG_WITH([openssl],
+            [AS_HELP_STRING([--with-openssl[[=PATH]]], [Enables OpenSSL,
+            location can be specified optionally])],
+            [use_openssl="$withval"],
+            [use_openssl="auto"])
+
 # Botan helper test function
 # Tries to compile a botan program, given the output of the given
 # config tool
@@ -656,12 +508,12 @@ AC_DEFUN([ACX_TRY_BOTAN_TOOL], [
     AC_MSG_CHECKING([usability of ${TOOL} ${TOOL_ARG}])
     if test "$BOTAN_TOOL" != "" ; then
         if test -x ${BOTAN_TOOL}; then
-            BOTAN_LIBS=`$BOTAN_TOOL $TOOL_ARG --libs`
+            CRYPTO_LIBS=`$BOTAN_TOOL $TOOL_ARG --libs`
             LIBS_SAVED=${LIBS}
-            LIBS="$LIBS $BOTAN_LIBS"
-            BOTAN_INCLUDES=`$BOTAN_TOOL $TOOL_ARG --cflags`
+            LIBS="$LIBS $CRYPTO_LIBS"
+            CRYPTO_INCLUDES=`$BOTAN_TOOL $TOOL_ARG --cflags`
             CPPFLAGS_SAVED=${CPPFLAGS}
-            CPPFLAGS="$BOTAN_INCLUDES $CPPFLAGS"
+            CPPFLAGS="$CRYPTO_INCLUDES $CPPFLAGS"
             #AC_MSG_RESULT([found])
             AC_LINK_IFELSE(
                 [AC_LANG_PROGRAM([#include <botan/botan.h>
@@ -706,14 +558,18 @@ AC_DEFUN([ACX_TRY_BOTAN_TOOL], [
 # against botan should neither -config scripts nor pkgconfig data exist).
 #
 botan_config="yes"
+if test "${use_openssl}" != "auto" -a "${use_openssl}" != "no" ; then
+   botan_config="no"
+fi
 AC_ARG_WITH([botan-config],
   AC_HELP_STRING([--with-botan-config=PATH],
     [specify the path to the botan-config script]),
     [botan_config="$withval"])
 if test "${botan_config}" = "no" ; then
-    AC_MSG_ERROR([Need botan for libcryptolink])
-fi
-if test "${botan_config}" != "yes" ; then
+    if test "${use_openssl}" = "no" ; then
+       AC_MSG_ERROR([Need Botan or OpenSSL for libcryptolink])
+    fi
+elif test "${botan_config}" != "yes" ; then
     if test -x "${botan_config}" ; then
         if test -d "${botan_config}" ; then
             AC_MSG_ERROR([${botan_config} is a directory])
@@ -758,91 +614,101 @@ fi
 
 if test "x${BOTAN_CONFIG}" != "x"
 then
-    BOTAN_LIBS=`${BOTAN_CONFIG} --libs`
-    BOTAN_INCLUDES=`${BOTAN_CONFIG} --cflags`
+    CRYPTO_LIBS=`${BOTAN_CONFIG} --libs`
+    CRYPTO_INCLUDES=`${BOTAN_CONFIG} --cflags`
 
     # We expect botan-config --libs to contain -L<path_to_libbotan>, but
     # this is not always the case.  As a heuristics workaround we add
     # -L`botan-config --prefix/lib` in this case (if not present already).
-    # Same for BOTAN_INCLUDES (but using include instead of lib) below.
+    # Same for CRYPTO_INCLUDES (but using include instead of lib) below.
     if [ ${BOTAN_CONFIG} --prefix >/dev/null 2>&1 ] ; then
-        echo ${BOTAN_LIBS} | grep -- -L > /dev/null || \
-            BOTAN_LIBS="-L`${BOTAN_CONFIG} --prefix`/lib ${BOTAN_LIBS}"
-        echo ${BOTAN_INCLUDES} | grep -- -I > /dev/null || \
-            BOTAN_INCLUDES="-I`${BOTAN_CONFIG} --prefix`/include ${BOTAN_INCLUDES}"
+        echo ${CRYPTO_LIBS} | grep -- -L > /dev/null || \
+            CRYPTO_LIBS="-L`${BOTAN_CONFIG} --prefix`/lib ${CRYPTO_LIBS}"
+        echo ${CRYPTO_INCLUDES} | grep -- -I > /dev/null || \
+            CRYPTO_INCLUDES="-I`${BOTAN_CONFIG} --prefix`/include ${CRYPTO_INCLUDES}"
     fi
 fi
 
-dnl Determine the Botan version
-AC_MSG_CHECKING([Botan version])
-cat > conftest.cpp << EOF
+if test "x${CRYPTO_LIBS}" != "x"
+then
+   dnl Determine the Botan version
+   AC_MSG_CHECKING([Botan version])
+   cat > conftest.cpp << EOF
 #include <botan/version.h>
 AUTOCONF_BOTAN_VERSION=BOTAN_VERSION_MAJOR . BOTAN_VERSION_MINOR . BOTAN_VERSION_PATCH
 EOF
 
-BOTAN_VERSION=`$CPP $CPPFLAGS $BOTAN_INCLUDES conftest.cpp | grep '^AUTOCONF_BOTAN_VERSION=' | $SED -e 's/^AUTOCONF_BOTAN_VERSION=//' -e 's/[[ 	]]//g' -e 's/"//g' 2> /dev/null`
-if test -z "$BOTAN_VERSION"; then
-  BOTAN_VERSION="unknown"
-fi
-$RM -f conftest.cpp
-AC_MSG_RESULT([$BOTAN_VERSION])
+   CRYPTO_VERSION=`$CPP $CPPFLAGS $CRYPTO_INCLUDES conftest.cpp | grep '^AUTOCONF_BOTAN_VERSION=' | $SED -e 's/^AUTOCONF_BOTAN_VERSION=//' -e 's/[[ 	]]//g' -e 's/"//g' 2> /dev/null`
+   if test -z "$CRYPTO_VERSION"; then
+      CRYPTO_VERSION="unknown"
+   fi
+   $RM -f conftest.cpp
+   AC_MSG_RESULT([$CRYPTO_VERSION])
 
-# botan-config script (and the way we call pkg-config) returns -L and -l
-# as one string, but we need them in separate values
-BOTAN_LDFLAGS=
-BOTAN_NEWLIBS=
-for flag in ${BOTAN_LIBS}; do
-    BOTAN_LDFLAGS="${BOTAN_LDFLAGS} `echo $flag | ${SED} -ne '/^\(\-L\)/p'`"
-    BOTAN_LIBS="${BOTAN_LIBS} `echo $flag | ${SED} -ne '/^\(\-l\)/p'`"
-done
+   # botan-config script (and the way we call pkg-config) returns -L and -l
+   # as one string, but we need them in separate values
+   CRYPTO_LDFLAGS=
+   for flag in ${CRYPTO_LIBS}; do
+       CRYPTO_LDFLAGS="${CRYPTO_LDFLAGS} `echo $flag | ${SED} -ne '/^\(\-L\)/p'`"
+       CRYPTO_LIBS="${CRYPTO_LIBS} `echo $flag | ${SED} -ne '/^\(\-l\)/p'`"
+   done
 
-# See python_rpath for some info on why we do this
-if test "x$ISC_RPATH_FLAG" != "x"; then
-    BOTAN_RPATH=
-    for flag in ${BOTAN_LIBS}; do
-            BOTAN_RPATH="${BOTAN_RPATH} `echo $flag | ${SED} -ne "s/^\(\-L\)/${ISC_RPATH_FLAG}/p"`"
-    done
-AC_SUBST(BOTAN_RPATH)
+   # See crypto_rpath for some info on why we do this
+   if test "x$ISC_RPATH_FLAG" != "x"; then
+       CRYPTO_RPATH=
+       for flag in ${CRYPTO_LIBS}; do
+               CRYPTO_RPATH="${CRYPTO_RPATH} `echo $flag | ${SED} -ne "s/^\(\-L\)/${ISC_RPATH_FLAG}/p"`"
+       done
+   # According to the libtool manual, it should be sufficient if we
+   # specify the "-R libdir" in our wrapper library of botan (no other
+   # programs will need libbotan directly); "libdir" should be added to
+   # the program's binary image.  But we've seen in our build environments
+   # that (some versions of?) libtool doesn't propagate -R as documented,
+   # and it caused a linker error at run time.  To work around this, we
+   # also add the rpath to the global LDFLAGS.
+       LDFLAGS="$CRYPTO_RPATH $LDFLAGS"
+   fi
 
-# According to the libtool manual, it should be sufficient if we
-# specify the "-R libdir" in our wrapper library of botan (no other
-# programs will need libbotan directly); "libdir" should be added to
-# the program's binary image.  But we've seen in our build environments
-# that (some versions of?) libtool doesn't propagate -R as documented,
-# and it caused a linker error at run time.  To work around this, we
-# also add the rpath to the global LDFLAGS.
-    LDFLAGS="$BOTAN_RPATH $LDFLAGS"
-fi
+   # Even though chances are high we already performed a real compilation check
+   # in the search for the right (pkg)config data, we try again here, to
+   # be sure.
+   CPPFLAGS_SAVED=$CPPFLAGS
+   CPPFLAGS="$CRYPTO_INCLUDES $CPPFLAGS"
+   LIBS_SAVED="$LIBS"
+   LIBS="$LIBS $CRYPTO_LIBS"
 
-AC_SUBST(BOTAN_LDFLAGS)
-AC_SUBST(BOTAN_LIBS)
-AC_SUBST(BOTAN_INCLUDES)
-# Even though chances are high we already performed a real compilation check
-# in the search for the right (pkg)config data, we try again here, to
-# be sure.
-CPPFLAGS_SAVED=$CPPFLAGS
-CPPFLAGS="$BOTAN_INCLUDES $CPPFLAGS"
-LIBS_SAVED="$LIBS"
-LIBS="$LIBS $BOTAN_LIBS"
-
-# ac_header_preproc is an autoconf symbol (undocumented but stable) that
-# is set if the pre-processor phase passes. Thus by adding a custom
-# failure handler we can detect the difference between a header not existing
-# (or not even passing the pre-processor phase) and a header file resulting
-# in compilation failures.
-AC_CHECK_HEADERS([botan/botan.h],,[
+   # ac_header_preproc is an autoconf symbol (undocumented but stable) that
+   # is set if the pre-processor phase passes. Thus by adding a custom
+   # failure handler we can detect the difference between a header not existing
+   # (or not even passing the pre-processor phase) and a header file resulting
+   # in compilation failures.
+   AC_CHECK_HEADERS([botan/botan.h],,[
+        CRYPTO_INCLUDES=""
+        CRYPTO_LIBS=""
+        CRYPTO_LDFLAGS=""
+        CRYPTO_RPATH=""
 	if test "x$ac_header_preproc" = "xyes"; then
-		AC_MSG_ERROR([
+		AC_MSG_RESULT([
 botan/botan.h was found but is unusable. The most common cause of this problem
 is attempting to use an updated C++ compiler with older C++ libraries, such as
 the version of Botan that comes with your distribution. If you have updated
 your C++ compiler we highly recommend that you use support libraries such as
 Boost and Botan that were compiled with the same compiler version.])
 	else
-		AC_MSG_ERROR([Missing required header files.])
+		AC_MSG_RESULT([Missing required header files.])
 	fi]
-)
-AC_LINK_IFELSE(
+   )
+   CPPFLAGS=$CPPFLAGS_SAVED
+   LIBS=$LIBS_SAVED
+fi
+
+if test "x${CRYPTO_LIBS}" != "x"
+then
+   CPPFLAGS_SAVED=$CPPFLAGS
+   CPPFLAGS="$CRYPTO_INCLUDES $CPPFLAGS"
+   LIBS_SAVED="$LIBS"
+   LIBS="$LIBS $CRYPTO_LIBS"
+   AC_LINK_IFELSE(
         [AC_LANG_PROGRAM([#include <botan/botan.h>
                           #include <botan/hash.h>
                          ],
@@ -852,14 +718,116 @@ AC_LINK_IFELSE(
                          ])],
         [AC_MSG_RESULT([checking for Botan library... yes])],
         [AC_MSG_RESULT([checking for Botan library... no])
-         AC_MSG_ERROR([Needs Botan library 1.8 or higher. On some systems,
+         CRYPTO_INCLUDES=""
+         CRYPTO_LIBS=""
+         CRYPTO_LDFLAGS=""
+         CRYPTO_RPATH=""
+         AC_MSG_RESULT([Needs Botan library 1.8 or higher. On some systems,
          the botan package has a few missing dependencies (libbz2 and
-         libgmp), if libbotan has been installed and you see this error,
+         libgmp), if libbotan has been installed and you see this message,
          try upgrading to a higher version of botan or installing libbz2
          and libgmp.])]
-)
-CPPFLAGS=$CPPFLAGS_SAVED
-LIBS=$LIBS_SAVED
+   )
+   CPPFLAGS=$CPPFLAGS_SAVED
+   LIBS=$LIBS_SAVED
+fi
+
+if test "x${CRYPTO_LIBS}" != "x"
+then
+   CRYPTO_NAME="Botan"
+   DISABLED_CRYPTO="OpenSSL"
+   CRYPTO_PACKAGE="botan-1.8"
+   CRYPTO_CFLAGS=""
+   DISTCHECK_CRYPTO_CONFIGURE_FLAG="--with-botan=$botan_config"
+   AC_DEFINE_UNQUOTED([WITH_BOTAN], [], [Compile with Botan crypto])
+else
+   CRYPTO_NAME="OpenSSL"
+   DISABLED_CRYPTO="Botan"
+   CRYPTO_PACKAGE="openssl-1.0.0"
+   AC_DEFINE_UNQUOTED([WITH_OPENSSL], [], [Compile with OpenSSL crypto])
+   AC_MSG_CHECKING(for OpenSSL library)
+   # from bind9
+
+   if test "${use_openssl}" = "auto" ; then
+      use_openssl="yes"
+   fi
+   if test "${use_openssl}" = "yes" ; then
+      for d in /usr /usr/local /usr/local/ssl /usr/pkg /usr/sfw; do
+          if test -f $d/include/openssl/opensslv.h; then
+             use_openssl=$d; break
+          fi
+      done
+   fi
+   if test "${use_openssl}" = "yes" ; then
+      AC_MSG_ERROR([OpenSSL auto detection failed])
+   fi
+   if ! test -f "${use_openssl}"/include/openssl/opensslv.h ; then
+      AC_MSG_ERROR([OpenSSL not found at ${use_openssl}])
+   fi
+   AC_MSG_RESULT(yes)
+   if test "${use_openssl}" = "/usr" ; then
+      CRYPTO_INCLUDES=""
+      CRYPTO_LIBS="-lcrypto"
+      DISTCHECK_CRYPTO_CONFIGURE_FLAG="--with-openssl"
+      case "$host" in
+          *-apple-darwin*)
+              # Starting with OSX 10.7 (Lion) OpenSSL is deprecated
+              CRYPTO_CFLAGS="-Wno-deprecated-declarations"
+              ;;
+          *)
+              CRYPTO_CFLAGS=""
+              ;;
+      esac
+   else
+      CRYPTO_CFLAGS=""
+      CRYPTO_INCLUDES="-I${use_openssl}/include"
+      DISTCHECK_CRYPTO_CONFIGURE_FLAG="--with-openssl=${use_openssl}"
+      case $host in
+          *-solaris*)
+              CRYPTO_LIBS="-L${use_openssl}/lib -R${use_openssl}/lib -lcrypto"
+              ;;
+          *-hp-hpux*)
+              CRYPTO_LIBS="-L${use_openssl}/lib -Wl,+b: -lcrypto"
+              ;;
+          *-apple-darwin*)
+              if test -f "${use_openssl}/lib/libcrypto.dylib" ; then
+                 CRYPTO_LIBS="-L${use_openssl}/lib -lcrypto"
+              else
+                 CRYPTO_LIBS="${use_openssl}/lib/libcrypto.a"
+              fi
+              ;;
+          *)
+              CRYPTO_LIBS="-L${use_openssl}/lib -lcrypto"
+              ;;
+      esac
+    fi
+    dnl Determine the OpenSSL version
+    AC_MSG_CHECKING([OpenSSL version])
+    cat > conftest.cpp << EOF
+#include <openssl/opensslv.h>
+AUTOCONF_OPENSSL_VERSION=OPENSSL_VERSION_TEXT
+EOF
+
+    CRYPTO_VERSION=`$CPP $CPPFLAGS $CRYPTO_INCLUDES conftest.cpp | grep '^AUTOCONF_OPENSSL_VERSION=' | $SED -e 's/^AUTOCONF_OPENSSL_VERSION=//' -e 's/"//g' 2> /dev/null`
+    if test -z "$CRYPTO_VERSION" ; then
+       CRYPTO_VERSION="unknown"
+    fi
+    $RM -f conftest.cpp
+    AC_MSG_RESULT([$CRYPTO_VERSION])
+    #CRYPTO_LDFLAGS="-ldl"
+    CRYPTO_LDFLAGS=""
+    CRYPTO_RPATH=""
+fi
+
+AM_CONDITIONAL(HAVE_BOTAN, test "$CRYPTO_NAME" = "Botan")
+AM_CONDITIONAL(HAVE_OPENSSL, test "$CRYPTO_NAME" = "OpenSSL")
+AC_SUBST(CRYPTO_INCLUDES)
+AC_SUBST(CRYPTO_CFLAGS)
+AC_SUBST(CRYPTO_LIBS)
+AC_SUBST(CRYPTO_LDFLAGS)
+AC_SUBST(CRYPTO_PACKAGE)
+AC_SUBST(CRYPTO_RPATH)
+AC_SUBST(DISTCHECK_CRYPTO_CONFIGURE_FLAG)
 
 # Check for MySql.  The path to the mysql_config program is given with
 # the --with-mysql-config (default to /usr/bin/mysql-config).  By default,
@@ -937,7 +905,8 @@ if test "$PG_CONFIG" != "" ; then
 
     PGSQL_CPPFLAGS=`$PG_CONFIG --cppflags`
     PGSQL_INCLUDEDIR=`$PG_CONFIG --includedir`
-    PGSQL_CPPFLAGS="$PGSQL_CPPFLAGS -I$PGSQL_INCLUDEDIR"
+    PGSQL_INCLUDEDIR_SERVER=`$PG_CONFIG --includedir-server`
+    PGSQL_CPPFLAGS="$PGSQL_CPPFLAGS -I$PGSQL_INCLUDEDIR -I$PGSQL_INCLUDEDIR_SERVER"
     PGSQL_LIBS=`$PG_CONFIG --libdir`
     PGSQL_LIBS="-L$PGSQL_LIBS -lpq"
     PGSQL_VERSION=`$PG_CONFIG --version`
@@ -1037,7 +1006,7 @@ LIBS=$LIBS_SAVED
 #
 # Configure Boost header path
 #
-AX_BOOST_FOR_BIND10
+AX_BOOST_FOR_KEA
 # Boost offset_ptr is required in one library and not optional right now, so
 # we unconditionally fail here if it doesn't work.
 if test "$BOOST_OFFSET_PTR_WOULDFAIL" = "yes" -a "$werror_ok" = 1; then
@@ -1230,19 +1199,6 @@ AC_SUBST(GTEST_LDFLAGS)
 AC_SUBST(GTEST_LDADD)
 AC_SUBST(GTEST_SOURCE)
 
-dnl check for pkg-config itself
-AC_CHECK_PROG(HAVE_PKG_CONFIG, pkg-config, yes, no)
-if test "x$HAVE_PKG_CONFIG" = "xno" ; then
-  AC_MSG_ERROR(Please install pkg-config)
-fi
-
-AX_SQLITE3_FOR_BIND10
-if test "x$have_sqlite" = "xyes" ; then
-  enable_features="$enable_features SQLite3"
-
-  AX_PYTHON_SQLITE3
-fi
-
 #
 # ASIO: we extensively use it as the C++ event management module.
 #
@@ -1282,12 +1238,44 @@ AC_SUBST(PERL)
 AC_PATH_PROGS(AWK, gawk awk)
 AC_SUBST(AWK)
 
+
+# Kea configuration backend section
+# Currently there are 2 backends available: BUNDY and JSON
+# It is possible that we may extend this to accept additional backends.
+AC_ARG_WITH(kea-config,
+    AC_HELP_STRING([--with-kea-config],
+    [Selects configuration backend; currently available options are: BUNDY
+    (Kea reads configuration and commands from Bundy framework) or JSON (default,
+    Kea reads configuration from a JSON file from disk)]),
+    [CONFIG_BACKEND="$withval"],
+    [CONFIG_BACKEND=JSON])
+
+AM_CONDITIONAL(CONFIG_BACKEND_BUNDY, test "x$CONFIG_BACKEND" = "xBUNDY")
+AM_CONDITIONAL(CONFIG_BACKEND_JSON,   test "x$CONFIG_BACKEND" = "xJSON")
+
+if test "x$CONFIG_BACKEND" = "xBUNDY"; then
+    AC_DEFINE(CONFIG_BACKEND_BUNDY, 1, [Define to 1 if Kea config was set to BUNDY])
+fi
+
+if test "x$CONFIG_BACKEND" = "xJSON"; then
+    AC_DEFINE(CONFIG_BACKEND_JSON, 1, [Define to 1 if Kea config was set to JSON])
+fi
+
+# Let's sanity check if the specified backend value is allowed
+if test "x$CONFIG_BACKEND" != "xBUNDY" && test "x$CONFIG_BACKEND" != "xJSON"; then
+   AC_MSG_ERROR("Invalid configuration backend specified: $CONFIG_BACKEND. The only supported are: BUNDY JSON")
+fi
+
 AC_ARG_ENABLE(generate_docs, [AC_HELP_STRING([--enable-generate-docs],
   [regenerate documentation using Docbook [default=no]])],
   enable_generate_docs=$enableval, enable_generate_docs=no)
 
-# Check for xsltproc
 if test "x$enable_generate_docs" != xno ; then
+  if test "$PYTHON" == "no" ; then
+    AC_MSG_ERROR("Python3 is required for enable-generate-docs")
+  fi
+
+# Check for xsltproc
   AC_PATH_PROG([XSLTPROC], [xsltproc])
   if test -z "$XSLTPROC"; then
     AC_MSG_ERROR("xsltproc not found; it is required for --enable-generate-docs")
@@ -1381,73 +1369,42 @@ AC_CONFIG_FILES([compatcheck/Makefile
                  ext/Makefile
                  m4macros/Makefile
                  Makefile
-                 src/bin/bind10/bind10
-                 src/bin/bind10/init.py
-                 src/bin/bind10/Makefile
-                 src/bin/bind10/run_bind10.sh
-                 src/bin/bind10/tests/init_test.py
-                 src/bin/bind10/tests/Makefile
-                 src/bin/bindctl/bindctl_main.py
-                 src/bin/bindctl/Makefile
-                 src/bin/bindctl/run_bindctl.sh
-                 src/bin/bindctl/tests/bindctl_test
-                 src/bin/bindctl/tests/Makefile
-                 src/bin/cfgmgr/b10-cfgmgr.py
-                 src/bin/cfgmgr/local_plugins/Makefile
-                 src/bin/cfgmgr/Makefile
-                 src/bin/cfgmgr/plugins/datasrc.spec.pre
-                 src/bin/cfgmgr/plugins/Makefile
-                 src/bin/cfgmgr/plugins/tests/Makefile
-                 src/bin/cfgmgr/tests/b10-cfgmgr_test.py
-                 src/bin/cfgmgr/tests/Makefile
-                 src/bin/cmdctl/cmdctl.py
-                 src/bin/cmdctl/cmdctl.spec.pre
-                 src/bin/cmdctl/Makefile
-                 src/bin/cmdctl/run_b10-cmdctl.sh
-                 src/bin/cmdctl/tests/cmdctl_test
-                 src/bin/cmdctl/tests/Makefile
+                 src/Makefile
+                 src/bin/Makefile
                  src/bin/d2/Makefile
                  src/bin/d2/spec_config.h.pre
                  src/bin/d2/tests/Makefile
+                 src/bin/d2/tests/d2_process_tests.sh
                  src/bin/d2/tests/test_data_files_config.h
                  src/bin/dhcp4/Makefile
                  src/bin/dhcp4/spec_config.h.pre
                  src/bin/dhcp4/tests/Makefile
+                 src/bin/dhcp4/tests/dhcp4_process_tests.sh
                  src/bin/dhcp4/tests/marker_file.h
                  src/bin/dhcp4/tests/test_data_files_config.h
                  src/bin/dhcp4/tests/test_libraries.h
                  src/bin/dhcp6/Makefile
                  src/bin/dhcp6/spec_config.h.pre
                  src/bin/dhcp6/tests/Makefile
+                 src/bin/dhcp6/tests/dhcp6_process_tests.sh
                  src/bin/dhcp6/tests/marker_file.h
                  src/bin/dhcp6/tests/test_data_files_config.h
                  src/bin/dhcp6/tests/test_libraries.h
-                 src/bin/Makefile
-                 src/bin/msgq/Makefile
-                 src/bin/msgq/msgq.py
-                 src/bin/msgq/run_msgq.sh
-                 src/bin/msgq/tests/Makefile
-                 src/bin/sockcreator/Makefile
-                 src/bin/sockcreator/tests/Makefile
-                 src/bin/stats/Makefile
-                 src/bin/stats/stats_httpd.py
-                 src/bin/stats/stats.py
-                 src/bin/stats/tests/Makefile
-                 src/bin/stats/tests/testdata/Makefile
-                 src/bin/sysinfo/Makefile
-                 src/bin/sysinfo/run_sysinfo.sh
-                 src/bin/sysinfo/sysinfo.py
-                 src/bin/tests/Makefile
-                 src/bin/tests/process_rename_test.py
-                 src/bin/usermgr/b10-cmdctl-usermgr.py
-                 src/bin/usermgr/Makefile
-                 src/bin/usermgr/run_b10-cmdctl-usermgr.sh
-                 src/bin/usermgr/tests/Makefile
+                 src/bin/keactrl/Makefile
+                 src/bin/keactrl/kea.conf
+                 src/bin/keactrl/keactrl
+                 src/bin/keactrl/keactrl.conf
+                 src/bin/keactrl/tests/Makefile
+                 src/bin/keactrl/tests/keactrl_tests.sh
+                 src/bin/perfdhcp/Makefile
+                 src/bin/perfdhcp/tests/Makefile
+                 src/bin/perfdhcp/tests/testdata/Makefile
+                 src/hooks/Makefile
                  src/hooks/dhcp/Makefile
                  src/hooks/dhcp/user_chk/Makefile
                  src/hooks/dhcp/user_chk/tests/Makefile
                  src/hooks/dhcp/user_chk/tests/test_data_files_config.h
-                 src/hooks/Makefile
+                 src/lib/Makefile
                  src/lib/asiodns/Makefile
                  src/lib/asiodns/tests/Makefile
                  src/lib/asiolink/Makefile
@@ -1457,24 +1414,21 @@ AC_CONFIG_FILES([compatcheck/Makefile
                  src/lib/cc/tests/Makefile
                  src/lib/cc/tests/session_unittests_config.h
                  src/lib/config/Makefile
-                 src/lib/config/tests/data_def_unittests_config.h
                  src/lib/config/tests/Makefile
+                 src/lib/config/tests/data_def_unittests_config.h
                  src/lib/config/tests/testdata/Makefile
                  src/lib/cryptolink/Makefile
                  src/lib/cryptolink/tests/Makefile
+                 src/lib/dhcp/Makefile
+                 src/lib/dhcp/tests/Makefile
                  src/lib/dhcp_ddns/Makefile
                  src/lib/dhcp_ddns/tests/Makefile
-                 src/lib/dhcp/Makefile
                  src/lib/dhcpsrv/Makefile
-                 src/lib/dhcpsrv/testutils/Makefile
                  src/lib/dhcpsrv/tests/Makefile
                  src/lib/dhcpsrv/tests/test_libraries.h
-                 src/lib/dhcp/tests/Makefile
-                 src/lib/dns/gen-rdatacode.py
+                 src/lib/dhcpsrv/testutils/Makefile
                  src/lib/dns/Makefile
-                 src/lib/dns/python/Makefile
-                 src/lib/dns/python/pydnspp_config.h
-                 src/lib/dns/python/tests/Makefile
+                 src/lib/dns/gen-rdatacode.py
                  src/lib/dns/tests/Makefile
                  src/lib/dns/tests/testdata/Makefile
                  src/lib/exceptions/Makefile
@@ -1483,79 +1437,40 @@ AC_CONFIG_FILES([compatcheck/Makefile
                  src/lib/hooks/tests/Makefile
                  src/lib/hooks/tests/marker_file.h
                  src/lib/hooks/tests/test_libraries.h
+                 src/lib/log/Makefile
                  src/lib/log/compiler/Makefile
                  src/lib/log/interprocess/Makefile
                  src/lib/log/interprocess/tests/Makefile
-                 src/lib/log/Makefile
+                 src/lib/log/tests/Makefile
                  src/lib/log/tests/buffer_logger_test.sh
                  src/lib/log/tests/console_test.sh
                  src/lib/log/tests/destination_test.sh
                  src/lib/log/tests/init_logger_test.sh
                  src/lib/log/tests/local_file_test.sh
                  src/lib/log/tests/logger_lock_test.sh
-                 src/lib/log/tests/Makefile
                  src/lib/log/tests/severity_test.sh
                  src/lib/log/tests/tempdir.h
-                 src/lib/Makefile
-                 src/lib/python/bind10_config.py
-                 src/lib/python/isc/bind10/Makefile
-                 src/lib/python/isc/bind10/tests/Makefile
-                 src/lib/python/isc/cc/cc_generated/Makefile
-                 src/lib/python/isc/cc/Makefile
-                 src/lib/python/isc/cc/tests/cc_test
-                 src/lib/python/isc/cc/tests/Makefile
-                 src/lib/python/isc/config/Makefile
-                 src/lib/python/isc/config/tests/config_test
-                 src/lib/python/isc/config/tests/Makefile
-                 src/lib/python/isc/dns/Makefile
-                 src/lib/python/isc/log/Makefile
-                 src/lib/python/isc/log_messages/Makefile
-                 src/lib/python/isc/log_messages/work/__init__.py
-                 src/lib/python/isc/log_messages/work/Makefile
-                 src/lib/python/isc/log/tests/log_console.py
-                 src/lib/python/isc/log/tests/Makefile
-                 src/lib/python/isc/Makefile
-                 src/lib/python/isc/net/Makefile
-                 src/lib/python/isc/net/tests/Makefile
-                 src/lib/python/isc/sysinfo/Makefile
-                 src/lib/python/isc/sysinfo/tests/Makefile
-                 src/lib/python/isc/testutils/Makefile
-                 src/lib/python/isc/util/cio/Makefile
-                 src/lib/python/isc/util/cio/tests/Makefile
-                 src/lib/python/isc/util/Makefile
-                 src/lib/python/isc/util/tests/Makefile
-                 src/lib/python/Makefile
                  src/lib/testutils/Makefile
+                 src/lib/testutils/dhcp_test_lib.sh
                  src/lib/testutils/testdata/Makefile
-                 src/lib/util/io/Makefile
                  src/lib/util/Makefile
-                 src/lib/util/python/doxygen2pydoc.py
-                 src/lib/util/python/gen_wiredata.py
+                 src/lib/util/io/Makefile
                  src/lib/util/python/Makefile
-                 src/lib/util/python/mkpywrapper.py
-                 src/lib/util/pyunittests/Makefile
+                 src/lib/util/python/gen_wiredata.py
                  src/lib/util/tests/Makefile
                  src/lib/util/threads/Makefile
                  src/lib/util/threads/tests/Makefile
                  src/lib/util/unittests/Makefile
-                 src/Makefile
+                 tools/path_replacer.sh
                  tests/Makefile
                  tests/tools/Makefile
-                 tests/tools/perfdhcp/Makefile
-                 tests/tools/perfdhcp/tests/Makefile
-                 tests/tools/perfdhcp/tests/testdata/Makefile
 ])
 
  AC_CONFIG_COMMANDS([permissions], [
-           chmod +x src/bin/bind10/bind10
-           chmod +x src/bin/bind10/run_bind10.sh
-           chmod +x src/bin/bindctl/run_bindctl.sh
-           chmod +x src/bin/bindctl/tests/bindctl_test
-           chmod +x src/bin/cmdctl/run_b10-cmdctl.sh
-           chmod +x src/bin/cmdctl/tests/cmdctl_test
-           chmod +x src/bin/msgq/run_msgq.sh
-           chmod +x src/bin/sysinfo/run_sysinfo.sh
-           chmod +x src/bin/usermgr/run_b10-cmdctl-usermgr.sh
+           chmod +x src/bin/dhcp4/tests/dhcp4_process_tests.sh
+           chmod +x src/bin/dhcp6/tests/dhcp6_process_tests.sh
+           chmod +x src/bin/keactrl/keactrl
+           chmod +x src/bin/keactrl/tests/keactrl_tests.sh
            chmod +x src/lib/dns/gen-rdatacode.py
            chmod +x src/lib/log/tests/console_test.sh
            chmod +x src/lib/log/tests/destination_test.sh
@@ -1563,16 +1478,19 @@ AC_CONFIG_FILES([compatcheck/Makefile
            chmod +x src/lib/log/tests/local_file_test.sh
            chmod +x src/lib/log/tests/logger_lock_test.sh
            chmod +x src/lib/log/tests/severity_test.sh
-           chmod +x src/lib/python/isc/log/tests/log_console.py
-           chmod +x src/lib/util/python/doxygen2pydoc.py
            chmod +x src/lib/util/python/gen_wiredata.py
-           chmod +x src/lib/util/python/mkpywrapper.py
+           chmod +x tools/path_replacer.sh
 ])
 
 AC_OUTPUT
 
 dnl Print the results
 dnl
+
+EXTENDED_VERSION=${PACKAGE_VERSION}
+if test "$KEA_SRCID" != ""; then
+   EXTENDED_VERSION="${EXTENDED_VERSION} ($KEA_SRCID)"
+fi
 
 cat > config.report << END
 
@@ -1582,6 +1500,7 @@ cat > config.report << END
 Package:
   Name:            ${PACKAGE_NAME}
   Version:         ${PACKAGE_VERSION}
+  Extended version:${EXTENDED_VERSION}
   OS Family:       ${OS_TYPE}
   Using GNU sed:   ${GNU_SED}
 
@@ -1592,34 +1511,50 @@ C++ Compiler:
   CPPFLAGS:        ${CPPFLAGS}
   CXXFLAGS:        ${CXXFLAGS}
   LDFLAGS:         ${LDFLAGS}
-  B10_CXXFLAGS:    ${B10_CXXFLAGS}
+  KEA_CXXFLAGS:    ${KEA_CXXFLAGS}
+END
 
-Python:
+if test "$PYTHON" != "no" ; then
+cat >> config.report << END
+
+Python3:
   PYTHON_VERSION:  ${PYTHON_VERSION}
   PYTHON_INCLUDES: ${PYTHON_INCLUDES}
   PYTHON_CXXFLAGS: ${PYTHON_CXXFLAGS}
   PYTHON_LDFLAGS:  ${PYTHON_LDFLAGS}
   PYTHON_LIB:      ${PYTHON_LIB}
 
+END
+else
+cat >> config.report << END
+
+Python3:
+  not installed
+
+END
+fi
+
+cat >> config.report << END
 Boost:
   BOOST_VERSION:   ${BOOST_VERSION}
   BOOST_INCLUDES:  ${BOOST_INCLUDES}
 
-Botan:
-  BOTAN_VERSION:   ${BOTAN_VERSION}
-  BOTAN_INCLUDES:  ${BOTAN_INCLUDES}
-  BOTAN_LDFLAGS:   ${BOTAN_LDFLAGS}
-  BOTAN_LIBS:      ${BOTAN_LIBS}
+${CRYPTO_NAME}:
+  CRYPTO_VERSION:  ${CRYPTO_VERSION}
+  CRYPTO_CFLAGS:   ${CRYPTO_CFLAGS}
+  CRYPTO_INCLUDES: ${CRYPTO_INCLUDES}
+  CRYPTO_LDFLAGS:  ${CRYPTO_LDFLAGS}
+  CRYPTO_LIBS:     ${CRYPTO_LIBS}
+
+${DISABLED_CRYPTO}: no
 
 Log4cplus:
   LOG4CPLUS_VERSION: ${LOG4CPLUS_VERSION}
   LOG4CPLUS_INCLUDES: ${LOG4CPLUS_INCLUDES}
   LOG4CPLUS_LIBS:  ${LOG4CPLUS_LIBS}
 
-SQLite:
-  SQLITE_VERSION:  ${SQLITE_VERSION}
-  SQLITE_CFLAGS:   ${SQLITE_CFLAGS}
-  SQLITE_LIBS:     ${SQLITE_LIBS}
+Kea config backend:
+  CONFIG_BACKEND:  ${CONFIG_BACKEND}
 END
 
 # Avoid confusion on DNS/DHCP and only mention MySQL if it
@@ -1635,7 +1570,8 @@ END
 else
 cat >> config.report << END
 
-MySQL: no
+MySQL:
+  no
 END
 fi
 
@@ -1650,7 +1586,8 @@ END
 else
 cat >> config.report << END
 
-PostgreSQL: no
+PostgreSQL:
+  no
 END
 fi
 
@@ -1685,7 +1622,7 @@ END
 cat config.report
 cat <<EOF
 
-  Now you can type "make" to build BIND 10. Note that if you intend to
+  Now you can type "make" to build Kea. Note that if you intend to
   run "make check", you must run "make" first as some files need to be
   generated by "make" before "make check" can be run.
 

@@ -27,6 +27,7 @@
 #include <dhcpsrv/alloc_engine.h>
 #include <hooks/callout_handle.h>
 #include <dhcpsrv/dhcp4o6_ipc.h>
+#include <dhcpsrv/daemon.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -58,7 +59,7 @@ public:
 ///
 /// For detailed explanation or relations between main(), ControlledDhcpv4Srv,
 /// Dhcpv4Srv and other classes, see \ref dhcpv4Session.
-class Dhcpv4Srv : public boost::noncopyable {
+class Dhcpv4Srv : public Daemon {
 
 public:
 
@@ -83,13 +84,10 @@ public:
     /// root privileges.
     ///
     /// @param port specifies port number to listen on
-    /// @param dbconfig Lease manager configuration string.  The default
-    ///        of the "memfile" manager is used for testing.
     /// @param use_bcast configure sockets to support broadcast messages.
     /// @param direct_response_desired specifies if it is desired to
     /// use direct V4 traffic.
     Dhcpv4Srv(uint16_t port = DHCP4_SERVER_PORT,
-              const char* dbconfig = "type=memfile universe=4",
               const bool use_bcast = true,
               const bool direct_response_desired = true);
 
@@ -131,11 +129,6 @@ public:
     ///
     /// @name Public accessors returning values required to (re)open sockets.
     ///
-    /// These accessors must be public because sockets are reopened from the
-    /// static configuration callback handler. This callback handler invokes
-    /// @c ControlledDhcpv4Srv::openActiveSockets which requires parameters
-    /// which has to be retrieved from the @c ControlledDhcpv4Srv object.
-    /// They are retrieved using these public functions
     //@{
     ///
     /// @brief Get UDP port on which server should listen.
@@ -157,17 +150,6 @@ public:
     }
     //@}
 
-    /// @brief Open sockets which are marked as active in @c CfgMgr.
-    ///
-    /// This function reopens sockets according to the current settings in the
-    /// Configuration Manager. It holds the list of the interfaces which server
-    /// should listen on. This function will open sockets on these interfaces
-    /// only. This function is not exception safe.
-    ///
-    /// @param port UDP port on which server should listen.
-    /// @param use_bcast should broadcast flags be set on the sockets.
-    static void openActiveSockets(const uint16_t port, const bool use_bcast);
-
     /// @brief Starts DHCP_DDNS client IO if DDNS updates are enabled.
     ///
     /// If updates are enabled, it Instructs the D2ClientMgr singleton to
@@ -177,7 +159,7 @@ public:
 
     /// @brief Implements the error handler for DHCP_DDNS IO errors
     ///
-    /// Invoked when a NameChangeRequest send to b10-dhcp-ddns completes with
+    /// Invoked when a NameChangeRequest send to kea-dhcp-ddns completes with
     /// a failed status.  These are communications errors, not data related
     /// failures.
     ///
@@ -253,8 +235,9 @@ protected:
     /// This function accepts the following messages:
     /// - all valid relayed messages,
     /// - all unicast messages,
-    /// - all broadcast messages received on the interface for which the
-    /// suitable subnet exists (is configured).
+    /// - all broadcast messages except DHCPINFORM received on the interface
+    /// for which the suitable subnet exists (is configured).
+    /// - all DHCPINFORM messages with source address or ciaddr set.
     ///
     /// @param query Message sent by a client.
     ///
@@ -504,7 +487,7 @@ protected:
     /// This creates the @c isc::dhcp_ddns::NameChangeRequest; emits a
     /// the debug message which indicates whether the request being added is
     /// to remove DNS entry or add a new entry; and then sends the request
-    /// to the D2ClientMgr for transmission to b10-dhcp-ddns.
+    /// to the D2ClientMgr for transmission to kea-dhcp-ddns.
     ///
     /// @param chg_type A type of the NameChangeRequest (ADD or REMOVE).
     /// @param lease A lease for which the NameChangeRequest is created and

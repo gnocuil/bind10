@@ -113,7 +113,7 @@ const std::string Dhcpv6Srv::VENDOR_CLASS_PREFIX("VENDOR_CLASS_");
 /// double digit hex values separated by colons format, e.g.
 /// 01:ff:02:03:06:80:90:ab:cd:ef. Server will create it during first
 /// run and then use it afterwards.
-static const char* SERVER_DUID_FILE = "b10-dhcp6-serverid";
+static const char* SERVER_DUID_FILE = "kea-dhcp6-serverid";
 
 Dhcpv6Srv::Dhcpv6Srv(uint16_t port)
 :alloc_engine_(), serverid_(), port_(port), shutdown_(true)
@@ -123,21 +123,12 @@ Dhcpv6Srv::Dhcpv6Srv(uint16_t port)
 
     // Initialize objects required for DHCP server operation.
     try {
-        // Port 0 is used for testing purposes. It means that the server should
-        // not open any sockets at all. Some tests, e.g. configuration parser,
-        // require Dhcpv6Srv object, but they don't really need it to do
-        // anything. This speed up and simplifies the tests.
-        if (port > 0) {
-            if (IfaceMgr::instance().countIfaces() == 0) {
-                LOG_ERROR(dhcp6_logger, DHCP6_NO_INTERFACES);
-                return;
-            }
-            // Create error handler. This handler will be called every time
-            // the socket opening operation fails. We use this handler to
-            // log a warning.
-            isc::dhcp::IfaceMgrErrorMsgCallback error_handler =
-                boost::bind(&Dhcpv6Srv::ifaceMgrSocket6ErrorHandler, _1);
-            IfaceMgr::instance().openSockets6(port_, error_handler);
+        // Port 0 is used for testing purposes where in most cases we don't
+        // rely on the physical interfaces. Therefore, it should be possible
+        // to create an object even when there are no usable interfaces.
+        if ((port > 0) && (IfaceMgr::instance().countIfaces() == 0)) {
+            LOG_ERROR(dhcp6_logger, DHCP6_NO_INTERFACES);
+            return;
         }
 
         string duid_file = CfgMgr::instance().getDataDir() + "/" + string(SERVER_DUID_FILE);
@@ -159,6 +150,12 @@ Dhcpv6Srv::Dhcpv6Srv(uint16_t port)
 
         // Instantiate allocation engine
         alloc_engine_.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE, 100));
+
+        // We have to point out to the CfgMgr that the we are in the IPv6
+        // domain, so as the IPv6 sockets are opened rather than IPv4 sockets
+        // which are the default.
+        CfgMgr::instance().getConfiguration()
+            ->cfg_iface_.setFamily(CfgIface::V6);
 
         /// @todo call loadLibraries() when handling configuration changes
         
@@ -260,10 +257,28 @@ bool Dhcpv6Srv::run() {
             if (!query) {
                 query = receivePacket(timeout);
             }
+        } catch (const SignalInterruptOnSelect) {
+            // Packet reception interrupted because a signal has been received.
+            // This is not an error because we might have received a SIGTERM,
+            // SIGINT or SIGHUP which are handled by the server. For signals
+            // that are not handled by the server we rely on the default
+            // behavior of the system, but there is nothing we should log here.
         } catch (const std::exception& e) {
             LOG_ERROR(dhcp6_logger, DHCP6_PACKET_RECEIVE_FAIL).arg(e.what());
         }
-        
+
+        // Handle next signal received by the process. It must be called after
+        // an attempt to receive a packet to properly handle server shut down.
+        // The SIGTERM or SIGINT will be received prior to, or during execution
+        // of select() (select is invoked by recivePacket()). When that happens,
+        // select will be interrupted. The signal handler will be invoked
+        // immediately after select(). The handler will set the shutdown flag
+        // and cause the process to terminate before the next select() function
+        // is called. If the function was called before receivePacket the
+        // process could wait up to the duration of timeout of select() to
+        // terminate.
+        handleSignal();
+
         // Timeout may be reached or signal received, which breaks select()
         // with no packet received
         if (!query) {
@@ -427,13 +442,12 @@ bool Dhcpv6Srv::run() {
 
         } catch (const isc::Exception& e) {
 
-            // Catch-all exception (at least for ones based on the isc
-            // Exception class, which covers more or less all that
-            // are explicitly raised in the BIND 10 code).  Just log
-            // the problem and ignore the packet. (The problem is logged
-            // as a debug message because debug is disabled by default -
-            // it prevents a DDOS attack based on the sending of problem
-            // packets.)
+            // Catch-all exception (at least for ones based on the isc Exception
+            // class, which covers more or less all that are explicitly raised
+            // in the Kea code).  Just log the problem and ignore the packet.
+            // (The problem is logged as a debug message because debug is
+            // disabled by default - it prevents a DDOS attack based on the
+            // sending of problem packets.)
             LOG_DEBUG(dhcp6_logger, DBG_DHCP6_BASIC, DHCP6_PACKET_PROCESS_FAIL)
                 .arg(query->getName())
                 .arg(query->getRemoteAddr().toText())
@@ -1382,16 +1396,16 @@ Dhcpv6Srv::assignIA_PD(const Subnet6Ptr& subnet, const DuidPtr& duid,
     // Check if the client sent us a hint in his IA_PD. Clients may send an
     // address in their IA_NA options as a suggestion (e.g. the last address
     // they used before).
-    boost::shared_ptr<Option6IAPrefix> hintOpt =
+    boost::shared_ptr<Option6IAPrefix> hint_opt =
       boost::dynamic_pointer_cast<Option6IAPrefix>(ia->getOption(D6O_IAPREFIX));
     IOAddress hint("::");
-    if (hintOpt) {
-        hint = hintOpt->getAddress();
+    if (hint_opt) {
+        hint = hint_opt->getAddress();
     }
 
     LOG_DEBUG(dhcp6_logger, DBG_DHCP6_DETAIL, DHCP6_PROCESS_IA_PD_REQUEST)
         .arg(duid ? duid->toText() : "(no-duid)").arg(ia->getIAID())
-        .arg(hintOpt ? hint.toText() : "(no hint)");
+        .arg(hint_opt ? hint.toText() : "(no hint)");
 
     // "Fake" allocation is processing of SOLICIT message. We pretend to do an
     // allocation, but we do not put the lease in the database. That is ok,
@@ -2328,9 +2342,81 @@ Dhcpv6Srv::processRebind(const Pkt6Ptr& rebind) {
 
 Pkt6Ptr
 Dhcpv6Srv::processConfirm(const Pkt6Ptr& confirm) {
-    /// @todo: Implement this
+    // Get IA_NAs from the Confirm. If there are none, the message is
+    // invalid and must be discarded. There is nothing more to do.
+    OptionCollection ias = confirm->getOptions(D6O_IA_NA);
+    if (ias.empty()) {
+        return (Pkt6Ptr());
+    }
+
+    // The server sends Reply message in response to Confirm.
     Pkt6Ptr reply(new Pkt6(DHCPV6_REPLY, confirm->getTransid()));
-    return reply;
+    // Make sure that the necessary options are included.
+    copyDefaultOptions(confirm, reply);
+    appendDefaultOptions(confirm, reply);
+    // Indicates if at least one address has been verified. If no addresses
+    // are verified it means that the client has sent no IA_NA options
+    // or no IAAddr options and that client's message has to be discarded.
+    bool verified = false;
+    // Check if subnet can be selected for the message. If no subnet
+    // has been selected, the client is not on link.
+    SubnetPtr subnet = selectSubnet(confirm);
+    // Regardless if the subnet has been selected or not, we will iterate
+    // over the IA_NA options to check if they hold any addresses. If there
+    // are no, the Confirm is discarded.
+    // Check addresses in IA_NA options and make sure they are appropriate.
+    for (OptionCollection::const_iterator ia = ias.begin();
+         ia != ias.end(); ++ia) {
+        const OptionCollection& opts = ia->second->getOptions();
+        for (OptionCollection::const_iterator opt = opts.begin();
+             opt != opts.end(); ++opt) {
+            // Ignore options other than IAAddr.
+            if (opt->second->getType() == D6O_IAADDR) {
+                // Check that the address is in range in the subnet selected.
+                Option6IAAddrPtr iaaddr = boost::dynamic_pointer_cast<
+                    Option6IAAddr>(opt->second);
+                // If there is subnet selected and the address has been included
+                // in IA_NA, mark it verified and verify that it belongs to the
+                // subnet.
+                if (iaaddr) {
+                    // If at least one address is not in range, then return
+                    // the NotOnLink status code.
+                    if (subnet && !subnet->inRange(iaaddr->getAddress())) {
+                        std::ostringstream status_msg;
+                        status_msg << "Address " << iaaddr->getAddress()
+                                   << " is not on link.";
+                        reply->addOption(createStatusCode(STATUS_NotOnLink,
+                                                          status_msg.str()));
+                        return (reply);
+                    }
+                    verified = true;
+                } else {
+                    isc_throw(Unexpected, "failed to cast the IA Address option"
+                              " to the Option6IAAddrPtr. This is programming"
+                              " error and should be reported");
+                }
+            }
+        }
+    }
+
+    // It seems that the client hasn't included any addresses in which case
+    // the Confirm must be discarded.
+    if (!verified) {
+        return (Pkt6Ptr());
+    }
+
+    // If there is a subnet, there were addresses in IA_NA options and the
+    // addresses where consistent with the subnet then the client is on link.
+    if (subnet) {
+        // All addresses in range, so return success.
+        reply->addOption(createStatusCode(STATUS_Success,
+                                          "All addresses are on-link"));
+    } else {
+        reply->addOption(createStatusCode(STATUS_NotOnLink,
+                                          "No subnet selected"));
+    }
+
+    return (reply);
 }
 
 Pkt6Ptr
@@ -2416,59 +2502,6 @@ Dhcpv6Srv::disable4o6() {
         return;
     IfaceMgr::instance().deleteExternalSocket(ipc_->getSocket());
     ipc_ = boost::shared_ptr<DHCP4o6IPC>();
-}
-
-void
-Dhcpv6Srv::openActiveSockets(const uint16_t port) {
-    IfaceMgr::instance().closeSockets();
-
-    // Get the reference to the collection of interfaces. This reference should be
-    // valid as long as the program is run because IfaceMgr is a singleton.
-    // Therefore we can safely iterate over instances of all interfaces and modify
-    // their flags. Here we modify flags which indicate wheter socket should be
-    // open for a particular interface or not.
-    const IfaceMgr::IfaceCollection& ifaces = IfaceMgr::instance().getIfaces();
-    for (IfaceMgr::IfaceCollection::const_iterator iface = ifaces.begin();
-         iface != ifaces.end(); ++iface) {
-        Iface* iface_ptr = IfaceMgr::instance().getIface(iface->getName());
-        if (iface_ptr == NULL) {
-            isc_throw(isc::Unexpected, "Interface Manager returned NULL"
-                      << " instance of the interface when DHCPv6 server was"
-                      << " trying to reopen sockets after reconfiguration");
-        }
-        if (CfgMgr::instance().isActiveIface(iface->getName())) {
-            iface_ptr->inactive6_ = false;
-            LOG_INFO(dhcp6_logger, DHCP6_ACTIVATE_INTERFACE)
-                .arg(iface->getFullName());
-
-        } else {
-            // For deactivating interface, it should be sufficient to log it
-            // on the debug level because it is more useful to know what
-            // interface is activated which is logged on the info level.
-            LOG_DEBUG(dhcp6_logger, DBG_DHCP6_BASIC,
-                      DHCP6_DEACTIVATE_INTERFACE).arg(iface->getName());
-            iface_ptr->inactive6_ = true;
-
-        }
-
-        iface_ptr->clearUnicasts();
-
-        const IOAddress* unicast = CfgMgr::instance().getUnicast(iface->getName());
-        if (unicast) {
-            LOG_INFO(dhcp6_logger, DHCP6_SOCKET_UNICAST).arg(unicast->toText())
-                .arg(iface->getName());
-            iface_ptr->addUnicast(*unicast);
-        }
-    }
-    // Let's reopen active sockets. openSockets6 will check internally whether
-    // sockets are marked active or inactive.
-    // @todo Optimization: we should not reopen all sockets but rather select
-    // those that have been affected by the new configuration.
-    isc::dhcp::IfaceMgrErrorMsgCallback error_handler =
-        boost::bind(&Dhcpv6Srv::ifaceMgrSocket6ErrorHandler, _1);
-    if (!IfaceMgr::instance().openSockets6(port, error_handler)) {
-        LOG_WARN(dhcp6_logger, DHCP6_NO_SOCKETS_OPEN);
-    }
 }
 
 size_t
@@ -2682,10 +2715,26 @@ Dhcpv6Srv::d2ClientErrorHandler(const
                                 dhcp_ddns::NameChangeRequestPtr& ncr) {
     LOG_ERROR(dhcp6_logger, DHCP6_DDNS_REQUEST_SEND_FAILED).
               arg(result).arg((ncr ? ncr->toText() : " NULL "));
-    // We cannot communicate with b10-dhcp-ddns, suspend futher updates.
+    // We cannot communicate with kea-dhcp-ddns, suspend futher updates.
     /// @todo We may wish to revisit this, but for now we will simpy turn
     /// them off.
     CfgMgr::instance().getD2ClientMgr().suspendUpdates();
+}
+
+std::string
+Daemon::getVersion(bool extended) {
+    std::stringstream tmp;
+
+    tmp << VERSION;
+    if (extended) {
+        tmp << endl << EXTENDED_VERSION;
+
+        // @todo print more details (is it Botan or OpenSSL build,
+        // with or without MySQL/Postgres? What compilation options were
+        // used? etc)
+    }
+
+    return (tmp.str());
 }
 
 };

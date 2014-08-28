@@ -1,0 +1,114 @@
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+               "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"
+	       [<!ENTITY mdash "&#8212;">]>
+<!--
+ - Copyright (C) 2013, 2014  Internet Systems Consortium, Inc. ("ISC")
+ -
+ - Permission to use, copy, modify, and/or distribute this software for any
+ - purpose with or without fee is hereby granted, provided that the above
+ - copyright notice and this permission notice appear in all copies.
+ -
+ - THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
+ - REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+ - AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
+ - INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+ - LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+ - OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+ - PERFORMANCE OF THIS SOFTWARE.
+-->
+
+<refentry>
+
+  <refentryinfo>
+    <date>July 1, 2014</date>
+  </refentryinfo>
+
+  <refmeta>
+    <refentrytitle>kea-dhcp-ddns</refentrytitle>
+    <manvolnum>8</manvolnum>
+    <refmiscinfo>Kea</refmiscinfo>
+  </refmeta>
+
+  <refnamediv>
+    <refname>kea-dhcp-ddns</refname>
+    <refpurpose>DHCP-DDNS process in Kea</refpurpose>
+  </refnamediv>
+
+  <docinfo>
+    <copyright>
+      <year>2014</year>
+      <holder>Internet Systems Consortium, Inc. ("ISC")</holder>
+    </copyright>
+  </docinfo>
+
+  <refsynopsisdiv>
+    <cmdsynopsis>
+      <command>kea-dhcp-ddns</command>
+      <arg><option>-v</option></arg>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+
+  <refsynopsisdiv>
+    <cmdsynopsis>
+      <command>kea-dhcp-ddns</command>
+      <arg><option>-s</option></arg>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+
+
+  <refsect1>
+    <title>DESCRIPTION</title>
+    <para>
+      The <command>kea-dhcp-ddns</command> service process requests to
+      update DNS mapping based on DHCP lease change events. The service
+      may run either as a Kea module (integrated mode) or as a individual
+      process (stand-alone mode) dependent upon command line arguments. The
+      default is integrated mode.  Stand alone operation is strictly for
+      development purposes and is not suited for production.
+    </para>
+
+  </refsect1>
+
+  <refsect1>
+    <title>ARGUMENTS</title>
+
+    <para>The arguments are as follows:</para>
+
+    <variablelist>
+
+      <varlistentry>
+        <term><option>-v</option></term>
+        <listitem><para>
+          Verbose mode sets the logging level to debug. This is primarily
+          for development purposes in stand-alone mode.
+        </para></listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>-c</option></term>
+        <listitem><para>
+          Configuration file including the configuration for DHCP-DDNS server.
+          It may also contain configuration entries for other Kea services.
+        </para></listitem>
+      </varlistentry>
+
+    </variablelist>
+  </refsect1>
+
+  <refsect1>
+    <title>HISTORY</title>
+    <para>
+      The <command>b10-dhcp-ddns</command> process was first coded in
+      May 2013 by the ISC Kea/DHCP team.
+    </para>
+    <para>
+      Kea became a standalone server and the BIND10 framework was
+      removed. The DHCP-DDNS server binary was renamed to kea-dhcp-ddns
+      in July 2014.
+    </para>
+  </refsect1>
+</refentry><!--
+ - Local variables:
+ - mode: sgml
+ - End:
+-->

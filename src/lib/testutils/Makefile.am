@@ -2,7 +2,7 @@ SUBDIRS = . testdata
 
 AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib
 AM_CPPFLAGS += $(BOOST_INCLUDES)
-AM_CXXFLAGS=$(B10_CXXFLAGS)
+AM_CXXFLAGS=$(KEA_CXXFLAGS)
 
 if HAVE_GTEST
 noinst_LTLIBRARIES = libkea-testutils.la
@@ -15,4 +15,9 @@ libkea_testutils_la_LIBADD  = $(top_builddir)/src/lib/asiolink/libkea-asiolink.l
 libkea_testutils_la_LIBADD += $(top_builddir)/src/lib/dns/libkea-dns++.la
 endif
 
-EXTRA_DIST = portconfig.h socket_request.h
+# Include common libraries being used by shell-based tests.
+SHLIBS = dhcp_test_lib.sh.in
+
+EXTRA_DIST = portconfig.h socket_request.h $(SHLIBS)
+
+CLEANFILES = dhcp_test_lib.sh

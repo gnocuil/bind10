@@ -5,24 +5,34 @@
     "module_description": "DHPC-DDNS Service",
     "config_data": [
     { 
-        "item_name": "interface",
-        "item_type": "string",
-        "item_optional": true,
-        "item_default": "eth0"
-    },
-
-    { 
         "item_name": "ip_address",
         "item_type": "string",
         "item_optional": false,
         "item_default": "127.0.0.1" 
     },
-
     { 
         "item_name": "port",
         "item_type": "integer",
         "item_optional": true,
         "item_default": 53001 
+    },
+    {
+        "item_name": "dns_server_timeout",
+        "item_type": "integer",
+        "item_optional": true,
+        "item_default": 100
+    },
+    {
+        "item_name": "ncr_protocol",
+        "item_type": "string",
+        "item_optional": true,
+        "item_default": "UDP"
+    },
+    {
+        "item_name": "ncr_format",
+        "item_type": "string",
+        "item_optional": true,
+        "item_default": "JSON"
     },
     {
         "item_name": "tsig_keys",
@@ -34,7 +44,7 @@
             "item_name": "tsig_key",
             "item_type": "map",
             "item_optional": false,
-            "item_default": {"algorithm" : "hmac_md5"},
+            "item_default": {"algorithm" : "HMAC-MD5"},
             "map_item_spec": [ 
             {
                 "item_name": "name",
@@ -195,7 +205,7 @@
     "commands": [
         {
             "command_name": "shutdown",
-            "command_description": "Shuts down b10-dhcp-ddns module server.",
+            "command_description": "Shuts down kea-dhcp-ddns module server.",
             "command_args": [
             {
                 "item_name": "type",

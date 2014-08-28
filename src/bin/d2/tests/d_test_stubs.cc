@@ -1,4 +1,4 @@
-// Copyright (C) 2013  Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2014 Internet Systems Consortium, Inc. ("ISC")
 //
 // Permission to use, copy, modify, and/or distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
@@ -22,20 +22,19 @@ namespace isc {
 namespace d2 {
 
 const char* valid_d2_config = "{ "
-                        "\"interface\" : \"eth1\" , "
                         "\"ip_address\" : \"127.0.0.1\" , "
                         "\"port\" : 5031, "
                         "\"tsig_keys\": ["
                         "{ \"name\": \"d2_key.tmark.org\" , "
-                        "   \"algorithm\": \"md5\" ,"
-                        "   \"secret\": \"0123456989\" "
+                        "   \"algorithm\": \"HMAC-MD5\" ,"
+                        "   \"secret\": \"LSWXnfkKZjdPJI5QxlpnfQ==\" "
                         "} ],"
                         "\"forward_ddns\" : {"
                         "\"ddns_domains\": [ "
                         "{ \"name\": \"tmark.org.\" , "
                         "  \"key_name\": \"d2_key.tmark.org\" , "
                         "  \"dns_servers\" : [ "
-                        "  { \"hostname\": \"one.tmark\" } "
+                        "  { \"ip_address\": \"127.0.0.101\" } "
                         "] } ] }, "
                         "\"reverse_ddns\" : {"
                         "\"ddns_domains\": [ "
@@ -55,6 +54,7 @@ const char*  DStubProcess::stub_proc_command_("cool_proc_cmd");
 DStubProcess::DStubProcess(const char* name, IOServicePtr io_service)
     : DProcessBase(name, io_service, DCfgMgrBasePtr(new DStubCfgMgr())) {
 };
+
 
 void
 DStubProcess::init() {
@@ -96,14 +96,14 @@ DStubProcess::shutdown(isc::data::ConstElementPtr /* args */) {
 }
 
 isc::data::ConstElementPtr
-DStubProcess::configure(isc::data::ConstElementPtr /*config_set*/) {
+DStubProcess::configure(isc::data::ConstElementPtr config_set) {
     if (SimFailure::shouldFailOn(SimFailure::ftProcessConfigure)) {
         // Simulates a process configure failure.
         return (isc::config::createAnswer(1,
                 "Simulated process configuration error."));
     }
 
-    return (isc::config::createAnswer(0, "Configuration accepted."));
+    return (getCfgMgr()->parseConfig(config_set));
 }
 
 isc::data::ConstElementPtr
@@ -141,6 +141,7 @@ const char* DStubController::stub_app_name_ = "TestService";
 /// @brief Defines the bin name used to construct the controller
 const char* DStubController::stub_bin_name_ = "TestBin";
 
+
 DControllerBasePtr&
 DStubController::instance() {
     // If the singleton hasn't been created, do it now.
@@ -153,10 +154,11 @@ DStubController::instance() {
 }
 
 DStubController::DStubController()
-    : DControllerBase(stub_app_name_, stub_bin_name_) {
+    : DControllerBase(stub_app_name_, stub_bin_name_),
+      processed_signals_(), record_signal_only_(false) {
 
-    if (getenv("B10_FROM_BUILD")) {
-        setSpecFileName(std::string(getenv("B10_FROM_BUILD")) +
+    if (getenv("KEA_FROM_BUILD")) {
+        setSpecFileName(std::string(getenv("KEA_FROM_BUILD")) +
             "/src/bin/d2/dhcp-ddns.spec");
     } else {
         setSpecFileName(D2_SPECFILE_LOCATION);
@@ -212,22 +214,126 @@ const std::string DStubController::getCustomOpts() const {
     return (std::string(stub_option_x_));
 }
 
+void
+DStubController::processSignal(int signum){
+    processed_signals_.push_back(signum);
+    if (record_signal_only_) {
+        return;
+    }
+
+    DControllerBase::processSignal(signum);
+}
+
 DStubController::~DStubController() {
+}
+
+//************************** DControllerTest *************************
+
+void
+DControllerTest::writeFile(const std::string& content,
+                           const std::string& module_name) {
+    std::ofstream out(CFG_TEST_FILE, std::ios::trunc);
+    ASSERT_TRUE(out.is_open());
+
+    out << "{ \"" << (!module_name.empty() ? module_name
+                      : getController()->getAppName())
+        << "\": " << std::endl;
+
+    out << content;
+    out << " } " << std::endl;
+    out.close();
+}
+
+void
+DControllerTest::timedWriteCallback() {
+    writeFile(new_cfg_content_);
+}
+
+void
+DControllerTest::scheduleTimedWrite(const std::string& config,
+                                    int write_time_ms) {
+    new_cfg_content_ = config;
+    write_timer_.reset(new asiolink::IntervalTimer(*getIOService()));
+    write_timer_->setup(boost::bind(&DControllerTest::timedWriteCallback, this),
+                        write_time_ms, asiolink::IntervalTimer::ONE_SHOT);
+}
+
+void
+DControllerTest::runWithConfig(const std::string& config, int run_time_ms,
+                               time_duration& elapsed_time) {
+    // Create the config file.
+    writeFile(config);
+
+    // Shutdown (without error) after runtime.
+    isc::asiolink::IntervalTimer timer(*getIOService());
+    timer.setup(genShutdownCallback, run_time_ms);
+
+    // Record start time, and invoke launch().
+    // We catch and rethrow to allow testing error scenarios.
+    ptime start = microsec_clock::universal_time();
+    try  {
+        // Set up valid command line arguments
+        char* argv[] = { const_cast<char*>("progName"),
+                         const_cast<char*>("-c"),
+                         const_cast<char*>(DControllerTest::CFG_TEST_FILE),
+                         const_cast<char*>("-v") };
+        launch(4, argv);
+    } catch (...) {
+        // calculate elasped time, then rethrow it
+        elapsed_time = microsec_clock::universal_time() - start;
+        throw;
+    }
+
+    elapsed_time = microsec_clock::universal_time() - start;
+}
+
+DProcessBasePtr
+DControllerTest:: getProcess() {
+    DProcessBasePtr p;
+    if (getController()) {
+        p = getController()->getProcess();
+    }
+    return (p);
+}
+
+DCfgMgrBasePtr
+DControllerTest::getCfgMgr() {
+    DCfgMgrBasePtr p;
+    if (getProcess()) {
+        p = getProcess()->getCfgMgr();
+    }
+
+    return (p);
+}
+
+DCfgContextBasePtr
+DControllerTest::getContext() {
+    DCfgContextBasePtr p;
+    if (getCfgMgr()) {
+        p = getCfgMgr()->getContext();
+    }
+
+    return (p);
 }
 
 // Initialize controller wrapper's static instance getter member.
 DControllerTest::InstanceGetter DControllerTest::instanceGetter_ = NULL;
 
-//************************** TestParser *************************
+/// @brief Defines the name of the configuration file to use
+const char* DControllerTest::CFG_TEST_FILE = "d2-test-config.json";
 
-TestParser::TestParser(const std::string& param_name):param_name_(param_name) {
+//************************** ObjectParser *************************
+
+ObjectParser::ObjectParser(const std::string& param_name,
+                       ObjectStoragePtr& object_values)
+    : param_name_(param_name), object_values_(object_values) {
 }
 
-TestParser::~TestParser(){
+ObjectParser::~ObjectParser(){
 }
 
 void
-TestParser::build(isc::data::ConstElementPtr new_config) {
+ObjectParser::build(isc::data::ConstElementPtr new_config) {
     if (SimFailure::shouldFailOn(SimFailure::ftElementBuild)) {
         // Simulates an error during element data parsing.
         isc_throw (DCfgMgrBaseError, "Simulated build exception");
@@ -237,29 +343,33 @@ TestParser::build(isc::data::ConstElementPtr new_config) {
 }
 
 void
-TestParser::commit() {
+ObjectParser::commit() {
     if (SimFailure::shouldFailOn(SimFailure::ftElementCommit)) {
         // Simulates an error while committing the parsed element data.
         throw std::runtime_error("Simulated commit exception");
     }
+
+    object_values_->setParam(param_name_, value_,
+                             isc::data::Element::Position());
 }
 
 //************************** DStubContext *************************
 
-DStubContext::DStubContext(): extra_values_(new isc::dhcp::Uint32Storage()) {
+DStubContext::DStubContext(): object_values_(new ObjectStorage()) {
 }
 
 DStubContext::~DStubContext() {
 }
 
 void
-DStubContext::getExtraParam(const std::string& name, uint32_t& value) {
-    value = extra_values_->getParam(name);
+DStubContext::getObjectParam(const std::string& name,
+                             isc::data::ConstElementPtr& value) {
+    value = object_values_->getParam(name);
 }
 
-isc::dhcp::Uint32StoragePtr
-DStubContext::getExtraStorage() {
-    return (extra_values_);
+ObjectStoragePtr&
+DStubContext::getObjectStorage() {
+    return (object_values_);
 }
 
 DCfgContextBasePtr
@@ -268,7 +378,7 @@ DStubContext::clone() {
 }
 
 DStubContext::DStubContext(const DStubContext& rhs): DCfgContextBase(rhs),
-    extra_values_(new isc::dhcp::Uint32Storage(*(rhs.extra_values_))) {
+    object_values_(new ObjectStorage(*(rhs.object_values_))) {
 }
 
 //************************** DStubCfgMgr *************************
@@ -280,40 +390,44 @@ DStubCfgMgr::DStubCfgMgr()
 DStubCfgMgr::~DStubCfgMgr() {
 }
 
-isc::dhcp::ParserPtr
-DStubCfgMgr::createConfigParser(const std::string& element_id) {
-    isc::dhcp::DhcpConfigParser* parser = NULL;
-    DStubContextPtr context =
-                    boost::dynamic_pointer_cast<DStubContext>(getContext());
+DCfgContextBasePtr
+DStubCfgMgr::createNewContext() {
+    return (DCfgContextBasePtr (new DStubContext()));
+}
 
+isc::dhcp::ParserPtr
+DStubCfgMgr::createConfigParser(const std::string& element_id,
+                                const isc::data::Element::Position& pos) {
+    isc::dhcp::ParserPtr parser;
+    DStubContextPtr context
+        = boost::dynamic_pointer_cast<DStubContext>(getContext());
     if (element_id == "bool_test") {
-        parser = new isc::dhcp::BooleanParser(element_id,
-                                              context->getBooleanStorage());
+        parser.reset(new isc::dhcp::
+                         BooleanParser(element_id,
+                                       context->getBooleanStorage()));
     } else if (element_id == "uint32_test") {
-        parser = new isc::dhcp::Uint32Parser(element_id,
-                                             context->getUint32Storage());
+        parser.reset(new isc::dhcp::Uint32Parser(element_id,
+                                                 context->getUint32Storage()));
     } else if (element_id == "string_test") {
-        parser = new isc::dhcp::StringParser(element_id,
-                                             context->getStringStorage());
-    } else if (element_id == "extra_test") {
-        parser = new isc::dhcp::Uint32Parser(element_id,
-                                             context->getExtraStorage());
+        parser.reset(new isc::dhcp::StringParser(element_id,
+                                                 context->getStringStorage()));
     } else {
         // Fail only if SimFailure dictates we should.  This makes it easier
         // to test parse ordering, by permitting a wide range of element ids
         // to "succeed" without specifically supporting them.
         if (SimFailure::shouldFailOn(SimFailure::ftElementUnknown)) {
-            isc_throw(DCfgMgrBaseError, "Configuration parameter not supported: "
-                      << element_id);
+            isc_throw(DCfgMgrBaseError,
+                      "Configuration parameter not supported: " << element_id
+                      << pos);
         }
 
-        parsed_order_.push_back(element_id);
-        parser = new TestParser(element_id);
+        // Going to assume anything else is an object element.
+        parser.reset(new ObjectParser(element_id, context->getObjectStorage()));
     }
 
-    return (isc::dhcp::ParserPtr(parser));
+    parsed_order_.push_back(element_id);
+    return (parser);
 }
-
 
 }; // namespace isc::d2
 }; // namespace isc

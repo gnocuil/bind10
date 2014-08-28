@@ -55,9 +55,16 @@ Iface::Iface(const std::string& name, int ifindex)
     :name_(name), ifindex_(ifindex), mac_len_(0), hardware_type_(0),
      flag_loopback_(false), flag_up_(false), flag_running_(false),
      flag_multicast_(false), flag_broadcast_(false), flags_(0),
-     inactive4_(false), inactive6_(false)
+     inactive4_(false), inactive6_(false), read_buffer_(NULL),
+     read_buffer_size_(0)
 {
     memset(mac_, 0, sizeof(mac_));
+}
+
+Iface::~Iface() {
+    if (read_buffer_ != NULL) {
+        free(read_buffer_);
+    }
 }
 
 void
@@ -167,6 +174,24 @@ bool Iface::delSocket(const uint16_t sockfd) {
     return (false); // socket not found
 }
 
+void
+Iface::resizeReadBuffer(const size_t new_size) {
+    // Do nothing if the new size is equal to the current size.
+    if (new_size == read_buffer_size_) {
+        return;
+    }
+
+    read_buffer_size_ = new_size;
+    read_buffer_ = static_cast<uint8_t*>(realloc(read_buffer_,
+                                                 read_buffer_size_));
+    if (read_buffer_ == NULL) {
+        free(read_buffer_);
+        read_buffer_size_ = 0;
+        isc_throw(SocketConfigError, "failed to resize the socket read"
+                  " buffer");
+    }
+}
+
 IfaceMgr::IfaceMgr()
     :control_buf_len_(CMSG_SPACE(sizeof(struct in6_pktinfo))),
      control_buf_(new char[control_buf_len_]),
@@ -214,6 +239,18 @@ Iface::getAddress4(isc::asiolink::IOAddress& address) const {
         }
     }
     // There is no IPv4 address assigned to this interface.
+    return (false);
+}
+
+bool
+Iface::hasAddress(const isc::asiolink::IOAddress& address) const {
+    const AddressCollection& addrs = getAddresses();
+    for (AddressCollection::const_iterator addr = addrs.begin();
+         addr != addrs.end(); ++addr) {
+        if (address == *addr) {
+            return (true);
+        }
+    }
     return (false);
 }
 
@@ -344,9 +381,22 @@ IfaceMgr::hasOpenSocket(const IOAddress& addr) const {
         const Iface::SocketCollection& sockets = iface->getSockets();
         for (Iface::SocketCollection::const_iterator sock = sockets.begin();
              sock != sockets.end(); ++sock) {
-            // Check if the socket address matches the specified address.
+            // Check if the socket address matches the specified address or
+            // if address is unspecified (in6addr_any).
             if (sock->addr_ == addr) {
                 return (true);
+            } else if (sock->addr_ == IOAddress("::")) {
+                // Handle the case that the address is unspecified (any).
+                // In this case, we should check if the specified address
+                // belongs to any of the interfaces.
+                for (Iface::AddressCollection::const_iterator addr_it =
+                         iface->getAddresses().begin();
+                     addr_it != iface->getAddresses().end();
+                     ++addr_it) {
+                    if (addr == *addr_it) {
+                        return (true);
+                    }
+                }
             }
         }
     }
@@ -392,35 +442,44 @@ void IfaceMgr::stubDetectIfaces() {
     addInterface(iface);
 }
 
-
-
 bool
 IfaceMgr::openSockets4(const uint16_t port, const bool use_bcast,
                        IfaceMgrErrorMsgCallback error_handler) {
     int count = 0;
-
-// This option is used to bind sockets to particular interfaces.
-// This is currently the only way to discover on which interface
-// the broadcast packet has been received. If this option is
-// not supported then only one interface should be confugured
-// to listen for broadcast traffic.
-#ifdef SO_BINDTODEVICE
-    const bool bind_to_device = true;
-#else
-    const bool bind_to_device = false;
-#endif
-
     int bcast_num = 0;
 
     for (IfaceCollection::iterator iface = ifaces_.begin();
          iface != ifaces_.end();
          ++iface) {
 
-        if (iface->flag_loopback_ ||
-            !iface->flag_up_ ||
-            !iface->flag_running_ ||
-            iface->inactive4_) {
+        // If the interface is inactive, there is nothing to do. Simply
+        // proceed to the next detected interface.
+        if (iface->inactive4_) {
             continue;
+
+        } else {
+            // If the interface has been specified in the configuration that
+            // it should be used to listen the DHCP traffic we have to check
+            // that the interface configuration is valid and that the interface
+            // is not a loopback interface. In both cases, we want to report
+            // that the socket will not be opened.
+            if (iface->flag_loopback_) {
+                IFACEMGR_ERROR(SocketConfigError, error_handler,
+                               "must not open socket on the loopback"
+                               " interface " << iface->getName());
+                continue;
+
+            }
+
+            IOAddress out_address("0.0.0.0");
+            if (!iface->flag_up_ || !iface->flag_running_ ||
+                !iface->getAddress4(out_address)) {
+                IFACEMGR_ERROR(SocketConfigError, error_handler,
+                               "the interface " << iface->getName()
+                               << " is down or has no usable IPv4"
+                               " addresses configured");
+                continue;
+            }
         }
 
         Iface::AddressCollection addrs = iface->getAddresses();
@@ -437,17 +496,26 @@ IfaceMgr::openSockets4(const uint16_t port, const bool use_bcast,
             // options on the socket so as it can receive and send broadcast
             // messages.
             if (iface->flag_broadcast_ && use_bcast) {
-                // If our OS supports binding socket to a device we can listen
-                // for broadcast messages on multiple interfaces. Otherwise we
-                // bind to INADDR_ANY address but we can do it only once. Thus,
-                // if one socket has been bound we can't do it any further.
-                if (!bind_to_device && bcast_num > 0) {
+                // The DHCP server must have means to determine which interface
+                // the broadcast packets are coming from. This is achieved by
+                // binding a socket to the device (interface) and specialized
+                // packet filters (e.g. BPF and LPF) implement this mechanism.
+                // If the PktFilterInet (generic one) is used, the socket is
+                // bound to INADDR_ANY which effectively binds the socket to
+                // all addresses on all interfaces. So, only one of those can
+                // be opened. Currently, the direct response support is
+                // provided by the PktFilterLPF and PktFilterBPF, so by checking
+                // the support for direct response we actually determine that
+                // one of those objects is in use. For all other objects we
+                // assume that binding to the device is not supported and we
+                // cease opening sockets and display the appropriate message.
+                if (!isDirectResponseSupported() && bcast_num > 0) {
                     IFACEMGR_ERROR(SocketConfigError, error_handler,
-                                   "SO_BINDTODEVICE socket option is"
-                                   " not supported on this OS;"
-                                   " therefore, DHCP server can only"
-                                   " listen broadcast traffic on a"
-                                   " single interface");
+                                   "Binding socket to an interface is not"
+                                   " supported on this OS; therefore only"
+                                   " one socket listening to broadcast traffic"
+                                   " can be opened. Sockets will not be opened"
+                                   " on remaining interfaces");
                     continue;
 
                 } else {
@@ -466,9 +534,7 @@ IfaceMgr::openSockets4(const uint16_t port, const bool use_bcast,
                     // Binding socket to an interface is not supported so we
                     // can't open any more broadcast sockets. Increase the
                     // number of open broadcast sockets.
-                    if (!bind_to_device) {
-                        ++bcast_num;
-                    }
+                    ++bcast_num;
                 }
 
             } else {
@@ -500,11 +566,29 @@ IfaceMgr::openSockets6(const uint16_t port,
          iface != ifaces_.end();
          ++iface) {
 
-        if (iface->flag_loopback_ ||
-            !iface->flag_up_ ||
-            !iface->flag_running_ ||
-            iface->inactive6_) {
+        if (iface->inactive6_) {
             continue;
+
+        } else {
+            // If the interface has been specified in the configuration that
+            // it should be used to listen the DHCP traffic we have to check
+            // that the interface configuration is valid and that the interface
+            // is not a loopback interface. In both cases, we want to report
+            // that the socket will not be opened.
+            if (iface->flag_loopback_) {
+                IFACEMGR_ERROR(SocketConfigError, error_handler,
+                               "must not open socket on the loopback"
+                               " interface " << iface->getName());
+                continue;
+
+            } else if (!iface->flag_up_ || !iface->flag_running_) {
+                IFACEMGR_ERROR(SocketConfigError, error_handler,
+                               "the interface " << iface->getName()
+                               << " is down or has no usable IPv6"
+                               " addresses configured");
+                continue;
+            }
+
         }
 
         // Open unicast sockets if there are any unicast addresses defined
@@ -545,9 +629,9 @@ IfaceMgr::openSockets6(const uint16_t port,
                 continue;
             }
 
-            // Run OS-specific function to open a socket on link-local address
-            // and join multicast group (non-Linux OSes), or open two sockets and
-            // bind one to link-local, another one to multicast address.
+            // Run OS-specific function to open a socket capable of receiving
+            // packets sent to All_DHCP_Relay_Agents_and_Servers multicast
+            // address.
             if (openMulticastSocket(*iface, *addr, port, error_handler)) {
                 ++count;
             }
@@ -612,6 +696,14 @@ IfaceMgr::getIface(const std::string& ifname) {
 void
 IfaceMgr::clearIfaces() {
     ifaces_.clear();
+}
+
+void
+IfaceMgr::clearUnicasts() {
+    for (IfaceCollection::iterator iface=ifaces_.begin();
+         iface!=ifaces_.end(); ++iface) {
+        iface->clearUnicasts();
+    }
 }
 
 int IfaceMgr::openSocket(const std::string& ifname, const IOAddress& addr,
@@ -777,17 +869,6 @@ IfaceMgr::getLocalAddress(const IOAddress& remote_addr, const uint16_t port) {
 }
 
 int
-IfaceMgr::openSocket6(Iface& iface, const IOAddress& addr, uint16_t port,
-                      const bool join_multicast) {
-    // Assuming that packet filter is not NULL, because its modifier checks it.
-    SocketInfo info = packet_filter6_->openSocket(iface, addr, port,
-                                                  join_multicast);
-    iface.addSocket(info);
-
-    return (info.sockfd_);
-}
-
-int
 IfaceMgr::openSocket4(Iface& iface, const IOAddress& addr,
                           const uint16_t port, const bool receive_bcast,
                           const bool send_bcast) {
@@ -881,8 +962,20 @@ IfaceMgr::receive4(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */) {
     if (result == 0) {
         // nothing received and timeout has been reached
         return (Pkt4Ptr()); // NULL
+
     } else if (result < 0) {
-        isc_throw(SocketReadError, strerror(errno));
+        // In most cases we would like to know whether select() returned
+        // an error because of a signal being received  or for some other
+        // reasaon. This is because DHCP servers use signals to trigger
+        // certain actions, like reconfiguration or graceful shutdown.
+        // By catching a dedicated exception the caller will know if the
+        // error returned by the function is due to the reception of the
+        // signal or for some other reason.
+        if (errno == EINTR) {
+            isc_throw(SignalInterruptOnSelect, strerror(errno));
+        } else {
+            isc_throw(SocketReadError, strerror(errno));
+        }
     }
 
     // Let's find out which socket has the data
@@ -984,8 +1077,20 @@ Pkt6Ptr IfaceMgr::receive6(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */
     if (result == 0) {
         // nothing received and timeout has been reached
         return (Pkt6Ptr()); // NULL
+
     } else if (result < 0) {
-        isc_throw(SocketReadError, strerror(errno));
+        // In most cases we would like to know whether select() returned
+        // an error because of a signal being received  or for some other
+        // reasaon. This is because DHCP servers use signals to trigger
+        // certain actions, like reconfiguration or graceful shutdown.
+        // By catching a dedicated exception the caller will know if the
+        // error returned by the function is due to the reception of the
+        // signal or for some other reason.
+        if (errno == EINTR) {
+            isc_throw(SignalInterruptOnSelect, strerror(errno));
+        } else {
+            isc_throw(SocketReadError, strerror(errno));
+        }
     }
 
     // Let's find out which socket has the data

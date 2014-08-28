@@ -25,6 +25,9 @@
 namespace isc {
 namespace d2 {
 
+/// @brief Defines a map of ConstElementPtrs keyed by name
+typedef std::map<std::string, isc::data::ConstElementPtr> ElementMap;
+
 /// @brief Exception thrown if the configuration manager encounters an error.
 class DCfgMgrBaseError : public isc::Exception {
 public:
@@ -77,9 +80,14 @@ public:
     /// will not throw if the parameter is not found in the context. The
     /// contents of the output parameter, value, will not be altered.
     /// It defaults to false if not specified.
+    ///
+    /// @return The parameter's element's position information if found,
+    /// otherwise it returns isc::data::Element::ZERO_POSITION().
+    ///
     /// @throw throws DhcpConfigError if the context does not contain the
     /// parameter and optional is false.
-    void getParam(const std::string& name, bool& value, bool optional=false);
+    const data::Element::Position&
+    getParam(const std::string& name, bool& value, bool optional=false);
 
     /// @brief Fetches the value for a given uint32_t configuration parameter
     /// from the context.
@@ -90,9 +98,14 @@ public:
     /// @param optional if true, the parameter is optional and the method
     /// will not throw if the parameter is not found in the context. The
     /// contents of the output parameter, value, will not be altered.
+    ///
+    /// @return The parameter's element's position information if found,
+    /// otherwise it returns isc::data::Element::ZERO_POSITION().
+    ///
     /// @throw throws DhcpConfigError if the context does not contain the
     /// parameter and optional is false.
-    void getParam(const std::string& name, uint32_t& value,
+    const data::Element::Position&
+    getParam(const std::string& name, uint32_t& value,
                  bool optional=false);
 
     /// @brief Fetches the value for a given string configuration parameter
@@ -104,9 +117,14 @@ public:
     /// @param optional if true, the parameter is optional and the method
     /// will not throw if the parameter is not found in the context. The
     /// contents of the output parameter, value, will not be altered.
+    ///
+    /// @return The parameter's element's position information if found,
+    /// otherwise it returns isc::data::Element::ZERO_POSITION().
+    ///
     /// @throw throws DhcpConfigError if the context does not contain the
     /// parameter and optional is false.
-    void getParam(const std::string& name, std::string& value,
+    const data::Element::Position&
+    getParam(const std::string& name, std::string& value,
                   bool optional=false);
 
     /// @brief Fetches the Boolean Storage. Typically used for passing
@@ -181,7 +199,7 @@ private:
     isc::dhcp::StringStoragePtr string_values_;
 };
 
-/// @brief Defines an unsorted, list of string Element IDs.
+/// @brief Defines a sequence of Element IDs used to specify a parsing order.
 typedef std::vector<std::string> ElementIdList;
 
 /// @brief Configuration Manager
@@ -198,7 +216,16 @@ typedef std::vector<std::string> ElementIdList;
 ///
 /// @code
 ///    make backup copy of configuration context
-///    for each top level element in new configuration
+///    Split top-level configuration elements into to sets:
+///      1. Set of scalar elements (strings, booleans, ints, etc..)
+///      2. Set of object elements (maps, lists, etc...)
+///    For each entry in the scalar set:
+///        get derivation-specific parser for element
+///        run parser
+///        update context with parsed results
+///        break on error
+///
+///    For each entry in the object set;
 ///        get derivation-specific parser for element
 ///        run parser
 ///        update context with parsed results
@@ -208,9 +235,9 @@ typedef std::vector<std::string> ElementIdList;
 ///        restore configuration context from backup
 /// @endcode
 ///
-/// After making a backup of the current context, it iterates over the top-level
-/// elements in the new configuration.  The order in which the elements are
-/// processed is either:
+/// The above structuring ensures that global parameters are parsed first
+/// making them available during subsequent object element parsing. The order
+/// in which the object elements are processed is either:
 ///
 ///    1. Natural order presented by the configuration set
 ///    2. Specific order determined by a list of element ids
@@ -256,9 +283,10 @@ public:
 
     /// @brief Adds a given element id to the end of the parse order list.
     ///
-    /// The order in which elements are retrieved from this is the order in
-    /// which they are added to the list. Derivations should use this method
-    /// to populate the parse order as part of their constructor.
+    /// The order in which object elements are retrieved from this is the
+    /// order in which they are added to the list. Derivations should use this
+    /// method to populate the parse order as part of their constructor.
+    /// Scalar parameters should NOT be included in this list.
     ///
     /// @param element_id is the string name of the element as it will appear
     /// in the configuration set.
@@ -280,7 +308,33 @@ public:
         return (context_);
     }
 
+    /// @brief Returns configuration summary in the textual format.
+    ///
+    /// This method returns the brief text describing the current configuration.
+    /// It may be used for logging purposes, e.g. whn the new configuration is
+    /// committed to notify a user about the changes in configuration.
+    ///
+    /// @param selection Bitfield which describes the parts of the configuration
+    /// to be returned.
+    ///
+    /// @return Summary of the configuration in the textual format.
+    virtual std::string getConfigSummary(const uint32_t selection) = 0;
+
 protected:
+    /// @brief Parses a set of scalar configuration elements into global
+    /// parameters
+    ///
+    /// For each scalar element in the set:
+    ///  - create a parser for the element
+    ///  - invoke the parser's build method
+    ///  - invoke the parser's commit method
+    ///
+    /// This will commit the values to context storage making them accessible
+    /// during object parsing.
+    ///
+    /// @param params_config set of scalar configuration elements to parse
+    virtual void buildParams(isc::data::ConstElementPtr params_config);
+
     /// @brief  Create a parser instance based on an element id.
     ///
     /// Given an element_id returns an instance of the appropriate parser.
@@ -289,11 +343,36 @@ protected:
     ///
     /// @param element_id is the string name of the element as it will appear
     /// in the configuration set.
+    /// @param pos position within the configuration text (or file) of element
+    /// to be parsed.  This is passed for error messaging.
     ///
     /// @return returns a ParserPtr to the parser instance.
     /// @throw throws DCfgMgrBaseError if an error occurs.
     virtual isc::dhcp::ParserPtr
-    createConfigParser(const std::string& element_id) = 0;
+    createConfigParser(const std::string& element_id,
+                       const isc::data::Element::Position& pos
+                       = isc::data::Element::Position()) = 0;
+
+    /// @brief Abstract factory which creates a context instance.
+    ///
+    /// This method is used at the beginning of configuration process to
+    /// create a fresh, empty copy of the derivation-specific context. This
+    /// new context will be populated during the configuration process
+    /// and will replace the existing context provided the configuration
+    /// process completes without error.
+    ///
+    /// @return Returns a DCfgContextBasePtr to the new context instance.
+    virtual DCfgContextBasePtr createNewContext() = 0;
+
+    /// @brief Replaces existing context with a new, emtpy context.
+    void resetContext();
+
+    /// @brief Update the current context.
+    ///
+    /// Replaces the existing context with the given context.
+    /// @param context Pointer to the new context.
+    /// @throw DCfgMgrBaseError if context is NULL.
+    void setContext(DCfgContextBasePtr& context);
 
 private:
 
