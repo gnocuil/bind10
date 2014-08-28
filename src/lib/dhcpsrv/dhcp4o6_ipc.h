@@ -74,18 +74,6 @@ public:
     /// queue is empty.
     Pkt4o6Ptr pop();
     
-    /// @brief Check if a given pkt4 is from a DHCP4o6 request.
-    ///
-    /// Since we don't add 4o6-related new fields into Pkt4,
-    /// after DHCPv4 server generated a Pkt4 response, this function is used
-    /// to check if current request is a DHCP4o6 request but not a 
-    /// DHCPv4 request.
-    ///
-    /// @return true if the given pkt4 is from current 4o6 request.
-    bool isDHCP4o6Request(Pkt4Ptr pkt4) {
-        return (current_ && pkt4 == current_->getPkt4());
-    }
-    
     /// @brief Get the instance of current processing Pkt4o6
     Pkt4o6Ptr currentPkt4o6() { return current_; }
 

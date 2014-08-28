@@ -248,9 +248,10 @@ bool Dhcpv6Srv::run() {
         Pkt6Ptr rsp;
         
         // 4o6
+        bool dhcp4o6Response = false;
         if (!query && ipc_ && !ipc_->empty()) {
             query = ipc_->pop()->getPkt6();
-            query->setType(DHCPV4_RESPONSE);
+            dhcp4o6Response = true;
         }
 
         try {
@@ -416,11 +417,10 @@ bool Dhcpv6Srv::run() {
                 break;
                 
             case DHCPV4_QUERY:
-                processDHCPv4Query(query);
-                break;
-
-            case DHCPV4_RESPONSE:
-                rsp = processDHCPv4Response(query);
+                if (dhcp4o6Response)
+                    rsp = processDHCPv4Response(query);
+                else
+                    processDHCPv4Query(query);
                 break;
 
             default:
