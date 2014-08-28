@@ -2038,6 +2038,7 @@ Dhcpv4Srv::disable4o6() {
         return;
     IfaceMgr::instance().deleteExternalSocket(ipc_->getSocket());
     ipc_ = boost::shared_ptr<DHCP4o6IPC>();
+}
 
 std::string
 Daemon::getVersion(bool extended) {
